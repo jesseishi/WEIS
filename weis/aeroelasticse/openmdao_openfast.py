@@ -491,6 +491,10 @@ class FASTLoadCases(ExplicitComponent):
 
         # Blade outputs
         self.add_output('max_TipDxc', val=0.0, units='m', desc='Maximum of channel TipDxc, i.e. out of plane tip deflection. For upwind rotors, the max value is tower the tower')
+        self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc around the tower crossing.')
+        self.add_output('max_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
+        self.add_output('max_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
+        self.add_output('max_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
@@ -2313,6 +2317,10 @@ class FASTLoadCases(ExplicitComponent):
         outputs = self.get_weighted_DELs(dlc_generator, inputs, discrete_inputs, outputs)
         
         outputs = self.get_control_measures(inputs, outputs)
+        
+        # Calculate the tower clearance between the blade and tower, takes the azimuth
+        # position of the blade into account.
+        outputs = self.get_tower_clearance(dlc_generator, outputs)
 
         if modopt['flags']['floating'] or (modopt['OpenFAST']['from_openfast'] and self.fst_vt['Fst']['CompMooring']>0):
             outputs = self.get_floating_measures(inputs, outputs)
@@ -2509,6 +2517,105 @@ class FASTLoadCases(ExplicitComponent):
         outputs['tower_maxMy_Mx'] = spline_Mx(z)
         outputs['tower_maxMy_My'] = spline_My(z)
         outputs['tower_maxMy_Mz'] = spline_Mz(z)
+        
+        return outputs
+
+    def get_tower_clearance(self, dlc_generator, outputs):
+        """
+        Calculate maximum blade deflection during tower passage for each blade.
+        
+        Parameters
+        ----------
+        dlc_generator : DLCGenerator
+            DLC generator with case information
+        outputs : dict
+            Dictionary to store the output values
+            
+        Returns
+        -------
+        dict
+            Updated outputs dictionary with tower passage deflection values
+        """
+        # TODO: Currently just blade deflection, add tower clearance calculation.
+        
+        save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
+        os.makedirs(save_dir, exist_ok=True)
+        fname = os.path.join(save_dir, 'tip_deflection_summary.yaml')
+        logging.info(f"Doing tower clearance analysis, saving to {fname}")
+
+        # Blade azimuth angles for tower passage (175° < azimuth < 185°)
+        HALVE_RANGE = 5
+        blade_azimuth_ranges = {
+            1: (180-HALVE_RANGE, 180+HALVE_RANGE),
+            2: (60-HALVE_RANGE, 60+HALVE_RANGE),
+            3: (300-HALVE_RANGE, 300+HALVE_RANGE)
+        }
+        
+        max_deflection_tower_passage = []
+        
+        # Store per-case results for each blade
+        deflection_per_case = np.zeros((self.n_blades, self.cruncher.noutputs))
+        
+        for blade_num in range(1, self.n_blades + 1):
+            tip_deflection_channel = f'TipDxc{blade_num}'
+            max_deflection_this_blade = 0.0
+            
+            # Get azimuth range for this blade
+            if blade_num in blade_azimuth_ranges:
+                azimuth_min, azimuth_max = blade_azimuth_ranges[blade_num]
+            else:
+                raise ValueError(f"Azimuth range not defined for blade {blade_num}")
+            
+            for i_ts in range(self.cruncher.noutputs):
+                timeseries = self.cruncher.outputs[i_ts]
+                
+                # Check if required channels exist
+                if 'Azimuth' not in timeseries.df.columns:
+                    raise KeyError("Azimuth channel not found in timeseries data")
+                if tip_deflection_channel not in timeseries.df.columns:
+                    raise KeyError(f"{tip_deflection_channel} channel not found in timeseries data")
+                
+                # Get azimuth and blade tip deflection data
+                azimuth = timeseries.df['Azimuth']
+                tip_deflection = timeseries.df[tip_deflection_channel]
+                
+                # Find indices where blade is passing the tower
+                tower_passage_mask = (azimuth > azimuth_min) & (azimuth < azimuth_max)
+                
+                if np.any(tower_passage_mask):
+                    # Get maximum deflection during tower passage for this timeseries
+                    max_deflection_this_case = np.max(tip_deflection[tower_passage_mask])
+                    deflection_per_case[blade_num-1, i_ts] = max_deflection_this_case
+                    max_deflection_this_blade = max(max_deflection_this_blade, max_deflection_this_case)
+                else:
+                    logging.warning(f"No tower passage events found for blade {blade_num} in timeseries {i_ts}.")
+            
+            max_deflection_tower_passage.append(max_deflection_this_blade)
+            outputs[f'max_TipDxc{blade_num}_towerPassing'] = max_deflection_this_blade
+        
+        # Set the maximum across all blades
+        outputs['max_TipDxc_towerPassing'] = np.max(max_deflection_tower_passage)
+        
+        # For 2-blade turbines, set blade 3 output to 0
+        if self.n_blades == 2:
+            outputs['max_TipDxc3_towerPassing'] = 0.0
+        
+        # Create tip deflection summary for YAML export        
+        tip_deflection_summary = {
+            'max_TipDxc_towerPassing': outputs['max_TipDxc_towerPassing'],
+            'max_TipDxc1_towerPassing': outputs['max_TipDxc1_towerPassing'],
+            'max_TipDxc2_towerPassing': outputs['max_TipDxc2_towerPassing'],
+            'max_TipDxc3_towerPassing': outputs['max_TipDxc3_towerPassing'],
+            'U': [c.URef for c in dlc_generator.cases],
+            'DLC_name': [c.label for c in dlc_generator.cases],
+            'max_deflection_table': np.max(deflection_per_case, axis=0).tolist(),
+            'max_deflection_blade_1_table': deflection_per_case[0, :].tolist(),
+            'max_deflection_blade_2_table': deflection_per_case[1, :].tolist() if self.n_blades >= 2 else [0.0] * self.cruncher.noutputs,
+            'max_deflection_blade_3_table': deflection_per_case[2, :].tolist() if self.n_blades >= 3 else [0.0] * self.cruncher.noutputs,
+        }
+        
+        # Save to YAML file
+        write_yaml(tip_deflection_summary, fname)
         
         return outputs
 
