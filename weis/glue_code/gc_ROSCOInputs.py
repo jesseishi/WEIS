@@ -26,6 +26,10 @@ def assign_ROSCO_values(wt_opt, modeling_options, opt_options):
     if rosco_init_options['IPC_ControlMode']:
         wt_opt['tune_rosco_ivc.IPC_Kp1p'] = rosco_init_options['IPC_Kp1p']
         wt_opt['tune_rosco_ivc.IPC_Ki1p'] = rosco_init_options['IPC_Ki1p']
+
+    # TCIPC
+    if rosco_init_options['TCIPC_ControlMode']:
+         wt_opt['tune_rosco_ivc.TCIPC_MaxTipDeflection'] = rosco_init_options['TCIPC_MaxTipDeflection']
     
     # Robust controller tuning
     if opt_options['design_variables']['control']['servo']['pitch_control']['stability_margin']['flag']:

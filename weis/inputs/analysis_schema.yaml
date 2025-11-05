@@ -266,6 +266,29 @@ properties:
                                                 maximum: 1.e+3
                                                 unit: none
                                             ref: *ipc_ref
+                            tcipc_control:
+                                type: object
+                                default: {}
+                                description: Tower Clearance Individual Pitch Control parameters
+                                properties:
+                                    TCIPC_MaxTipDeflection:
+                                        type: object
+                                        default: {}
+                                        description: Reference for the maximum tip deflection at tower passing
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: number
+                                                default: 0.0
+                                                minimum: 0.0
+                                                maximum: 1.e+3
+                                                unit: m
+                                            max:
+                                                type: number
+                                                default: 0.0
+                                                minimum: 0.0
+                                                maximum: 1.e+3
+                                                unit: m
             TMDs:
                 type: object
                 description: Design variables associated with TMDs

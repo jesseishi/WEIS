@@ -34,6 +34,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
         self.add_input('flp_tau',       val=0.0, units='s')
         self.add_input('IPC_Kp1p',      val=0.0, units='s')
         self.add_input('IPC_Ki1p',      val=0.0,)
+        self.add_input('TCIPC_MaxTipDeflection', val=0.0, units='m')
         self.add_input('tip_deflection',val=0.0, units='m')
         self.add_input('te_flap_end'   ,val=np.zeros(n_te_flaps))
         self.add_input('rotor_overspeed',val=0.0)
@@ -74,6 +75,10 @@ class Outputs_2_Screen(om.ExplicitComponent):
                 print('IPC Ki1p = {:2.3e}'.format(inputs['IPC_Kp1p'][0]))
             if self.options['opt_options']['design_variables']['control']['servo']['ipc_control']['Ki']:
                 print('IPC Ki1p = {:2.3e}'.format(inputs['IPC_Ki1p'][0]))
+
+            # TCIPC
+            if self.options['opt_options']['design_variables']['control']['servo']['tcipc_control']['TCIPC_MaxTipDeflection']:
+                print('TCIPC TCIPC_MaxTipDeflection = {:.1f}'.format(inputs['TCIPC_MaxTipDeflection'][0]))
            
             # Flaps
             if self.options['opt_options']['design_variables']['control']['flaps']['te_flap_end']['flag']:

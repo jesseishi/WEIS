@@ -99,6 +99,9 @@ class PoseOptimizationWEIS(PoseOptimization):
             wt_opt.model.add_design_var('tune_rosco_ivc.IPC_Ki1p', lower=control_opt['servo']['ipc_control']['Ki']['min'],
                                                             upper=control_opt['servo']['ipc_control']['Ki']['max'],
                                                             ref=control_opt['servo']['ipc_control']['Kp']['ref'])
+        if control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_MaxTipDeflection', lower=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['min'],
+                                                            upper=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['max'])
         if control_opt['servo']['pitch_control']['stability_margin']['flag']:
             wt_opt.model.add_design_var('tune_rosco_ivc.stability_margin', lower=control_opt['servo']['pitch_control']['stability_margin']['min'],
                                                             upper=control_opt['servo']['pitch_control']['stability_margin']['max'])

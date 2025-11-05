@@ -66,6 +66,7 @@ class WindPark(om.Group):
         tune_rosco_ivc.add_output('flp_tau',          val=0.0, units='s',         desc='Flap controller integral gain time constant')
         tune_rosco_ivc.add_output('IPC_Kp1p',         val=0.0, units='s',         desc='Individual pitch controller 1p proportional gain')
         tune_rosco_ivc.add_output('IPC_Ki1p',         val=0.0,                    desc='Individual pitch controller 1p integral gain')
+        tune_rosco_ivc.add_output('TCIPC_MaxTipDeflection', val=0.0, units='m',   desc='Maximum allowable tip deflection at the tower passing.')
         tune_rosco_ivc.add_output('stability_margin', val=0.0,                    desc='Stability margin for robust tuning')
         tune_rosco_ivc.add_output('omega_pc_max',     val=0.0,                    desc='Maximum allowable omega for robust tuning')
         # optional inputs - not connected right now!!
@@ -211,6 +212,7 @@ class WindPark(om.Group):
             self.connect('tune_rosco_ivc.zeta_vs',          'sse_tune.tune_rosco.zeta_vs')
             self.connect('tune_rosco_ivc.IPC_Kp1p',         'sse_tune.tune_rosco.IPC_Kp1p')
             self.connect('tune_rosco_ivc.IPC_Ki1p',         'sse_tune.tune_rosco.IPC_Ki1p')
+            self.connect('tune_rosco_ivc.TCIPC_MaxTipDeflection', 'sse_tune.tune_rosco.TCIPC_MaxTipDeflection')
             self.connect('tune_rosco_ivc.stability_margin', 'sse_tune.tune_rosco.stability_margin')
             self.connect('tune_rosco_ivc.omega_pc_max', 'sse_tune.tune_rosco.omega_pc_max')
 
@@ -941,6 +943,7 @@ class WindPark(om.Group):
                 self.connect('tune_rosco_ivc.flp_tau',        'outputs_2_screen_weis.flp_tau')
                 self.connect('tune_rosco_ivc.IPC_Kp1p',        'outputs_2_screen_weis.IPC_Kp1p')
                 self.connect('tune_rosco_ivc.IPC_Ki1p',        'outputs_2_screen_weis.IPC_Ki1p')
+                self.connect('tune_rosco_ivc.TCIPC_MaxTipDeflection', 'outputs_2_screen_weis.TCIPC_MaxTipDeflection')
                 self.connect('dac_ivc.te_flap_end',            'outputs_2_screen_weis.te_flap_end')
                 if modeling_options['OL2CL']['flag']:
                     self.connect('aeroelastic.OL2CL_pitch',      'outputs_2_screen_weis.OL2CL_pitch')
