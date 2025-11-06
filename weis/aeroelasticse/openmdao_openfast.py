@@ -2522,96 +2522,99 @@ class FASTLoadCases(ExplicitComponent):
 
     def get_tower_clearance(self, dlc_generator, outputs):
         """
-        Calculate maximum blade deflection during tower passage for each blade.
-        
-        Parameters
-        ----------
-        dlc_generator : DLCGenerator
-            DLC generator with case information
-        outputs : dict
-            Dictionary to store the output values
-            
-        Returns
-        -------
-        dict
-            Updated outputs dictionary with tower passage deflection values
+        Calculate the blade deflection and tower clearance when each blade passes in
+        front of the tower.
         """
-        # TODO: Currently just blade deflection, add tower clearance calculation.
+        # TODO: Currently just blade deflection, add tower clearance calculation (isn't
+        # there an openfast output for tower clearance?)
+        # TODO: This assumes a turbine with 3 blades.
         
+        # Make a directory and filename to save these results to.
         save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
         os.makedirs(save_dir, exist_ok=True)
         fname = os.path.join(save_dir, 'tip_deflection_summary.yaml')
         logging.info(f"Doing tower clearance analysis, saving to {fname}")
+        print(f"Doing tower clearance analysis, saving to {fname}")
 
-        # Blade azimuth angles for tower passage (175° < azimuth < 185°)
+        # Setup the azimuth ranges for each blade where we define it as being in front
+        # of the tower (175° < azimuth < 185°).
         HALVE_RANGE = 5
-        blade_azimuth_ranges = {
+        tower_azimuth_per_blade = {
             1: (180-HALVE_RANGE, 180+HALVE_RANGE),
             2: (60-HALVE_RANGE, 60+HALVE_RANGE),
             3: (300-HALVE_RANGE, 300+HALVE_RANGE)
         }
-        
-        max_deflection_tower_passage = []
-        
-        # Store per-case results for each blade
-        deflection_per_case = np.zeros((self.n_blades, self.cruncher.noutputs))
-        
-        for blade_num in range(1, self.n_blades + 1):
-            tip_deflection_channel = f'TipDxc{blade_num}'
-            max_deflection_this_blade = 0.0
-            
-            # Get azimuth range for this blade
-            if blade_num in blade_azimuth_ranges:
-                azimuth_min, azimuth_max = blade_azimuth_ranges[blade_num]
-            else:
-                raise ValueError(f"Azimuth range not defined for blade {blade_num}")
-            
-            for i_ts in range(self.cruncher.noutputs):
-                timeseries = self.cruncher.outputs[i_ts]
-                
-                # Check if required channels exist
-                if 'Azimuth' not in timeseries.df.columns:
-                    raise KeyError("Azimuth channel not found in timeseries data")
-                if tip_deflection_channel not in timeseries.df.columns:
-                    raise KeyError(f"{tip_deflection_channel} channel not found in timeseries data")
-                
-                # Get azimuth and blade tip deflection data
+
+        # Store the results for each blade and each simulation.
+        deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
+        case_names = []
+
+        # Go through all the simulations and store the deflection for each blade at the
+        # tower passing.
+        for i_ts, timeseries in enumerate(self.cruncher.outputs):
+
+            name = os.path.splitext(os.path.basename(timeseries.filepath))[0]
+            case_names.append(name)
+
+            # Loop through the blades.
+            for i_blade in range(self.n_blades):
+
+                # Get the azimuth position that we define as this blade being in front
+                # of the tower and make a mask to get the part of the timeseries
+                # corresponding to this.
+                azimuth_min, azimuth_max = tower_azimuth_per_blade[i_blade+1]
                 azimuth = timeseries.df['Azimuth']
-                tip_deflection = timeseries.df[tip_deflection_channel]
-                
-                # Find indices where blade is passing the tower
                 tower_passage_mask = (azimuth > azimuth_min) & (azimuth < azimuth_max)
-                
-                if np.any(tower_passage_mask):
-                    # Get maximum deflection during tower passage for this timeseries
-                    max_deflection_this_case = np.max(tip_deflection[tower_passage_mask])
-                    deflection_per_case[blade_num-1, i_ts] = max_deflection_this_case
-                    max_deflection_this_blade = max(max_deflection_this_blade, max_deflection_this_case)
+
+                # Extract the blade deflection at the tower passing.
+                tip_deflection = timeseries.df[f'TipDxc{i_blade+1}']
+                tip_deflection_tower_passing = tip_deflection[tower_passage_mask]
+
+                # Depending on if we had a tower passing, store the result or warn the
+                # user.
+                if tip_deflection_tower_passing.size == 0:
+                    # Apparently we didn't pass the tower. This can happen when we do a
+                    # test run but also when something went wrong so let's warn the user
+                    # about it.
+                    logging.warning(f"No tower passage found for blade {i_blade+1} in simulation {i_ts}. The TipDxc{i_blade+1} is set to 0.")
+                    
+                    # And we use a value of zero.
+                    deflection_table[i_blade][i_ts] = 0.0
+
                 else:
-                    logging.warning(f"No tower passage events found for blade {blade_num} in timeseries {i_ts}.")
-            
-            max_deflection_tower_passage.append(max_deflection_this_blade)
-            outputs[f'max_TipDxc{blade_num}_towerPassing'] = max_deflection_this_blade
-        
-        # Set the maximum across all blades
-        outputs['max_TipDxc_towerPassing'] = np.max(max_deflection_tower_passage)
-        
-        # For 2-blade turbines, set blade 3 output to 0
-        if self.n_blades == 2:
-            outputs['max_TipDxc3_towerPassing'] = 0.0
-        
+                    # Everything went fine, let's store the maximum deflection.
+                    deflection_table[i_blade][i_ts] = np.max(tip_deflection_tower_passing)
+
+        # Extract some statistics.
+        max_deflection_blade_1 = np.max(deflection_table[0])
+        max_deflection_blade_2 = np.max(deflection_table[1])
+        max_deflection_blade_3 = np.max(deflection_table[2])
+
+        max_deflection_per_simulation = np.max(deflection_table, axis=0)
+        max_deflection_per_blade = np.max(deflection_table, axis=1)
+        max_deflection = np.max(deflection_table)
+
+        # Write outputs.
+        outputs['max_TipDxc_towerPassing'] = max_deflection
+        outputs['max_TipDxc1_towerPassing'] = max_deflection_per_blade[0]
+        outputs['max_TipDxc2_towerPassing'] = max_deflection_per_blade[1]
+        outputs['max_TipDxc3_towerPassing'] = max_deflection_per_blade[2]
+
         # Create tip deflection summary for YAML export        
         tip_deflection_summary = {
+            # First some statistics over all the runs.
             'max_TipDxc_towerPassing': outputs['max_TipDxc_towerPassing'],
             'max_TipDxc1_towerPassing': outputs['max_TipDxc1_towerPassing'],
             'max_TipDxc2_towerPassing': outputs['max_TipDxc2_towerPassing'],
             'max_TipDxc3_towerPassing': outputs['max_TipDxc3_towerPassing'],
+            # Then for each simulation.
+            'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
             'DLC_name': [c.label for c in dlc_generator.cases],
-            'max_deflection_table': np.max(deflection_per_case, axis=0).tolist(),
-            'max_deflection_blade_1_table': deflection_per_case[0, :].tolist(),
-            'max_deflection_blade_2_table': deflection_per_case[1, :].tolist() if self.n_blades >= 2 else [0.0] * self.cruncher.noutputs,
-            'max_deflection_blade_3_table': deflection_per_case[2, :].tolist() if self.n_blades >= 3 else [0.0] * self.cruncher.noutputs,
+            'max_deflection_per_simulation': max_deflection_per_simulation.tolist(),
+            'max_deflection_blade_1_table': deflection_table[0].tolist(),
+            'max_deflection_blade_2_table': deflection_table[1].tolist(),
+            'max_deflection_blade_3_table': deflection_table[2].tolist(),
         }
         
         # Save to YAML file
