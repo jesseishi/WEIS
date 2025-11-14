@@ -132,6 +132,7 @@ def run_weis(fname_wt_input, fname_modeling_options, fname_opt_options,
             nFD = max([1,nFD])
 
             # Compute number of processors
+            # Note that n_OF_runs is reduced if you are doing a test_run.
             modeling_options = compute_optimal_nP(nFD, myopt.n_OF_runs, modeling_options, opt_options, maxnP = maxnP)
 
         # If WEIS is called simply to prep for an MPI call, no need to proceed and simply 

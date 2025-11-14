@@ -56,6 +56,13 @@ class FASTLoadCases(ExplicitComponent):
         self.options.declare('opt_options')
 
     def setup(self):
+        # Running OpenFAST simulations with FASTLoadCases and the rosco controller with
+        # TuneROSCO are only implicitly connected through the shared options
+        # dictionaries (e.g. modeling_options). So OpenMDAO will not run ROSCO if it's
+        # outputs are not explicitly necessary. However, of course they are necessary.
+        print("Adding dummy_variable_to_explicitly_couple_rosco_and_openfast as input of OpenFAST to make an explicit coupling.")
+        self.add_input("dummy_variable_to_explicitly_couple_rosco_and_openfast")
+
         modopt = self.options['modeling_options']
         rotorse_options  = modopt['WISDEM']['RotorSE']
         mat_init_options = modopt['materials']

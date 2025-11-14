@@ -18,7 +18,7 @@ def get_max_procs():
     return MPI.COMM_WORLD.Get_size() if MPI else 1
 
 def set_modopt_procs(modeling_options,modeling_override):
-    print('Applying the modeling option updates as additional overrides.')
+    # print('Applying the modeling option updates as additional overrides.')
     mpi_modeling_override = {}
     mpi_modeling_override['General'] = {}
     mpi_modeling_override['General']['openfast_configuration'] = {}

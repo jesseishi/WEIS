@@ -193,6 +193,13 @@ class TuneROSCO(ExplicitComponent):
 
         # self.add_output('VS_Rgn2K',     val=0.0, units='N*m/(rad/s)**2',      desc='Generator torque constant in Region 2 (HSS side), [N-m/(rad/s)^2]')
 
+        # Running OpenFAST simulations with FASTLoadCases and the rosco controller with
+        # TuneROSCO are only implicitly connected through the shared options
+        # dictionaries (e.g. modeling_options). So OpenMDAO will not run ROSCO if it's
+        # outputs are not explicitly necessary. However, of course they are necessary.
+        print("Adding dummy_variable_to_explicitly_couple_rosco_and_openfast as output of ROSCO to make an explicit coupling.")
+        self.add_output('dummy_variable_to_explicitly_couple_rosco_and_openfast', val=0.0, desc="")
+
     def compute(self,inputs,outputs, discrete_inputs, discrete_outputs):
         '''
         Call ROSCO toolbox to define controller

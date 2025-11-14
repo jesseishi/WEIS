@@ -947,3 +947,11 @@ class WindPark(om.Group):
                 self.connect('dac_ivc.te_flap_end',            'outputs_2_screen_weis.te_flap_end')
                 if modeling_options['OL2CL']['flag']:
                     self.connect('aeroelastic.OL2CL_pitch',      'outputs_2_screen_weis.OL2CL_pitch')
+
+        # Running OpenFAST simulations with FASTLoadCases and the rosco controller with
+        # TuneROSCO are only implicitly connected through the shared options
+        # dictionaries (e.g. modeling_options). So OpenMDAO will not run ROSCO if it's
+        # outputs are not explicitly necessary. However, of course they are necessary.
+        # TODO: This should only be enabled if the OpenFAST and ROSCO flags are true but
+        # since this is a hacky fix anyway, I'm leaving it like this for now.
+        self.connect('sse_tune.tune_rosco.dummy_variable_to_explicitly_couple_rosco_and_openfast', 'aeroelastic.dummy_variable_to_explicitly_couple_rosco_and_openfast')

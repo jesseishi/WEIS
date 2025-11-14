@@ -55,6 +55,8 @@ def compute_optimal_nP(nFD, nOF, modeling_options, opt_options, maxnP=1):
             nFD = max([nFD, 1])
             max_parallel_OF_runs = max([int(np.floor((maxnP - nFD) / nFD)), 1])
             nOFp = min([int(nOF), max_parallel_OF_runs])
+
+            print(f"{maxnP=}, {nFD=}, {max_parallel_OF_runs=}, {nOFp=}, {nOF=}.")
         elif modeling_options['OpenFAST_Linear']['flag']:
             if maxnP > 2. * nFD:
                 nFD = nFD
@@ -91,7 +93,9 @@ def compute_optimal_nP(nFD, nOF, modeling_options, opt_options, maxnP=1):
     modeling_updates['General']['openfast_configuration']['nFD'] = nFD
     modeling_updates['General']['openfast_configuration']['nOFp'] = nOFp
 
-    print('The following changes should be made to the modeling options:')
+    print(f"{maxnP=}, {nP=}, {nFD=}, {nOFp=}")
+
+    # print('The following changes should be made to the modeling options:')
     # print_yaml(modeling_updates)
 
     # Apply updates
