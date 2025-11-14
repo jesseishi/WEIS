@@ -289,6 +289,11 @@ properties:
                                                 minimum: 0.0
                                                 maximum: 1.e+3
                                                 unit: m
+                                            ref:
+                                                type: number
+                                                default: 20.0
+                                                minimum: 0.0
+                                                maximum: 100.0
             TMDs:
                 type: object
                 description: Design variables associated with TMDs

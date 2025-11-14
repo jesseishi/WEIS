@@ -50,7 +50,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
         print('Blade Mass:  {:<8.10f} kg'.format(inputs['blade_mass'][0]))
         print('LCOE:        {:<8.10f} USD/MWh'.format(inputs['lcoe'][0]))
         print('Tip Defl.:   {:<8.10f} m'.format(inputs['tip_deflection'][0]))
-        print('Tip Delf. (tower passing): {:<8.10f} m'.format(inputs['max_TipDxc_towerPassing'][0]))
+        print('Tip Defl. (tower passing): {:<8.10f} m'.format(inputs['max_TipDxc_towerPassing'][0]))
         
         # OpenFAST simulation summary
         if self.options['modeling_options']['OpenFAST']['flag']: 
