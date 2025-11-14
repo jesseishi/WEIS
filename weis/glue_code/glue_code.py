@@ -944,6 +944,7 @@ class WindPark(om.Group):
                 self.connect('tune_rosco_ivc.IPC_Kp1p',        'outputs_2_screen_weis.IPC_Kp1p')
                 self.connect('tune_rosco_ivc.IPC_Ki1p',        'outputs_2_screen_weis.IPC_Ki1p')
                 self.connect('tune_rosco_ivc.TCIPC_MaxTipDeflection', 'outputs_2_screen_weis.TCIPC_MaxTipDeflection')
+                self.connect('aeroelastic.max_TipDxc_towerPassing', 'outputs_2_screen_weis.max_TipDxc_towerPassing')
                 self.connect('dac_ivc.te_flap_end',            'outputs_2_screen_weis.te_flap_end')
                 if modeling_options['OL2CL']['flag']:
                     self.connect('aeroelastic.OL2CL_pitch',      'outputs_2_screen_weis.OL2CL_pitch')

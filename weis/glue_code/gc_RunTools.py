@@ -35,6 +35,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
         self.add_input('IPC_Kp1p',      val=0.0, units='s')
         self.add_input('IPC_Ki1p',      val=0.0,)
         self.add_input('TCIPC_MaxTipDeflection', val=0.0, units='m')
+        self.add_input('max_TipDxc_towerPassing', val=0.0, units='m')
         self.add_input('tip_deflection',val=0.0, units='m')
         self.add_input('te_flap_end'   ,val=np.zeros(n_te_flaps))
         self.add_input('rotor_overspeed',val=0.0)
@@ -49,6 +50,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
         print('Blade Mass:  {:<8.10f} kg'.format(inputs['blade_mass'][0]))
         print('LCOE:        {:<8.10f} USD/MWh'.format(inputs['lcoe'][0]))
         print('Tip Defl.:   {:<8.10f} m'.format(inputs['tip_deflection'][0]))
+        print('Tip Delf. (tower passing): {:<8.10f} m'.format(inputs['max_TipDxc_towerPassing'][0]))
         
         # OpenFAST simulation summary
         if self.options['modeling_options']['OpenFAST']['flag']: 
