@@ -498,7 +498,9 @@ class FASTLoadCases(ExplicitComponent):
 
         # Blade outputs
         self.add_output('max_TipDxc', val=0.0, units='m', desc='Maximum of channel TipDxc, i.e. out of plane tip deflection. For upwind rotors, the max value is tower the tower')
-        self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc around the tower crossing.')
+        # I also use the max_TipDxc_towerPassing as objective/constraint, so it's nice
+        # to add a ref value so the optimizer can scale.
+        self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
         self.add_output('max_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
         self.add_output('max_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
         self.add_output('max_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
