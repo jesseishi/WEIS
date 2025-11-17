@@ -386,11 +386,14 @@ def load_OMsql_multi(
                 elif isinstance(data[key][idx_key], float):
                     collected_data[key].append(float(np.array(data[key][idx_key])))
                 elif len(data[key][idx_key]) == 1:
-                    collected_data[key].append(float(np.array(data[key][idx_key])))
-                    # try:
-                    #     collected_data[key].append(np.array(data[key][idx_key][0]))
-                    # except:
-                    #     collected_data[key].append(np.array(data[key][idx_key]))
+                    if isinstance(data[key][idx_key][0], int):
+                        collected_data[key].append(int(np.array(data[key][idx_key][0])))
+                    elif isinstance(data[key][idx_key][0], float):
+                        collected_data[key].append(float(np.array(data[key][idx_key][0])))
+                    elif isinstance(data[key][idx_key][0], str):
+                        collected_data[key].append(str(np.array(data[key][idx_key][0])))
+                    else:
+                        raise TypeError(f"Don't now what to do with {data[key][idx_key]=}")
                 else:
                     collected_data[key].append(np.array(data[key][idx_key]).tolist())
                     ndarray_keys.append(key)
