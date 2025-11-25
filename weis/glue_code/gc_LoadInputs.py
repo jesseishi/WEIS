@@ -312,6 +312,8 @@ class WindTurbineOntologyPythonWEIS(WindTurbineOntologyPython):
             self.wt_init['control']['IPC']['IPC_Ki_1P'] = float(wt_opt['tune_rosco_ivc.IPC_Kp1p'])
             self.wt_init['control']['IPC']['IPC_Kp_1P'] = float(wt_opt['tune_rosco_ivc.IPC_Ki1p'])
             self.wt_init['control']['TCIPC']['TCIPC_MaxTipDeflection'] = float(wt_opt['tune_rosco_ivc.TCIPC_MaxTipDeflection'])
+            self.wt_init['control']['TCIPC']['TCIPC_nHarmonics'] = float(wt_opt['tune_rosco_ivc.TCIPC_nHarmonics'])
+            self.wt_init['control']['TCIPC']['TCIPC_ZeroYawDeflection'] = float(wt_opt['tune_rosco_ivc.TCIPC_ZeroYawDeflection'])
             if self.modeling_options['ROSCO']['Flp_Mode'] > 0:
                 self.wt_init['control']['dac']['flp_kp_norm']= float(wt_opt['tune_rosco_ivc.flp_kp_norm'])
                 self.wt_init['control']['dac']['flp_tau'] = float(wt_opt['tune_rosco_ivc.flp_tau'])

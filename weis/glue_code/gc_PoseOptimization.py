@@ -103,6 +103,13 @@ class PoseOptimizationWEIS(PoseOptimization):
             wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_MaxTipDeflection', lower=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['min'],
                                                             upper=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['max'],
                                                             ref=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['ref'])
+        if control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_nHarmonics', lower=control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['min'],
+                                                            upper=control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['max'],
+                                                            ref=control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['ref'])
+        if control_opt['servo']['tcipc_control']['TCIPC_ZeroYawDeflection']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_ZeroYawDeflection', lower=control_opt['servo']['tcipc_control']['TCIPC_ZeroYawDeflection']['min'],
+                                                            upper=control_opt['servo']['tcipc_control']['TCIPC_ZeroYawDeflection']['max'])
         if control_opt['servo']['pitch_control']['stability_margin']['flag']:
             wt_opt.model.add_design_var('tune_rosco_ivc.stability_margin', lower=control_opt['servo']['pitch_control']['stability_margin']['min'],
                                                             upper=control_opt['servo']['pitch_control']['stability_margin']['max'])

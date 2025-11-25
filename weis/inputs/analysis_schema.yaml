@@ -294,6 +294,44 @@ properties:
                                                 default: 20.0
                                                 minimum: 0.0
                                                 maximum: 100.0
+                                                unit: m
+                                    TCIPC_nHarmonics:
+                                        type: object
+                                        default: {}
+                                        description: 
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: number
+                                                default: 0
+                                                minimum: 0
+                                                maximum: 10
+                                            max:
+                                                type: number
+                                                default: 5
+                                                minimum: 0
+                                                maximum: 100
+                                            ref:
+                                                type: number
+                                                default: 10.0
+                                                minimum: 0.0
+                                                maximum: 100.0
+                                    TCIPC_ZeroYawDeflection:
+                                        type: object
+                                        default: {}
+                                        description: 
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: number
+                                                default: 0
+                                                minimum: 0
+                                                maximum: 1
+                                            max:
+                                                type: number
+                                                default: 1
+                                                minimum: 0
+                                                maximum: 1
             TMDs:
                 type: object
                 description: Design variables associated with TMDs

@@ -504,6 +504,10 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
         self.add_output('max_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
         self.add_output('max_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
+        self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
+        self.add_output('mean_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
+        self.add_output('mean_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
+        self.add_output('mean_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
@@ -2555,7 +2559,8 @@ class FASTLoadCases(ExplicitComponent):
         }
 
         # Store the results for each blade and each simulation.
-        deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
+        max_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
+        mean_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         case_names = []
 
         # Go through all the simulations and store the deflection for each blade at the
@@ -2588,26 +2593,38 @@ class FASTLoadCases(ExplicitComponent):
                     logging.warning(f"No tower passage found for blade {i_blade+1} in simulation {i_ts}. The TipDxc{i_blade+1} is set to 0.")
                     
                     # And we use a value of zero.
-                    deflection_table[i_blade][i_ts] = 0.0
+                    max_deflection_table[i_blade][i_ts] = 0.0
+                    mean_deflection_table[i_blade][i_ts] = 0.0
 
                 else:
-                    # Everything went fine, let's store the maximum deflection.
-                    deflection_table[i_blade][i_ts] = np.max(tip_deflection_tower_passing)
+                    # Everything went fine, let's store the maximum and mean deflection.
+                    max_deflection_table[i_blade][i_ts] = np.max(tip_deflection_tower_passing)
+                    mean_deflection_table[i_blade][i_ts] = np.mean(tip_deflection_tower_passing)
 
         # Extract some statistics.
-        max_deflection_blade_1 = np.max(deflection_table[0])
-        max_deflection_blade_2 = np.max(deflection_table[1])
-        max_deflection_blade_3 = np.max(deflection_table[2])
+        max_deflection_blade_1 = np.max(max_deflection_table[0])
+        max_deflection_blade_2 = np.max(max_deflection_table[1])
+        max_deflection_blade_3 = np.max(max_deflection_table[2])
+        mean_deflection_blade_1 = np.mean(mean_deflection_table[0])
+        mean_deflection_blade_2 = np.mean(mean_deflection_table[1])
+        mean_deflection_blade_3 = np.mean(mean_deflection_table[2])
 
-        max_deflection_per_simulation = np.max(deflection_table, axis=0)
-        max_deflection_per_blade = np.max(deflection_table, axis=1)
-        max_deflection = np.max(deflection_table)
+        max_deflection_per_simulation = np.max(max_deflection_table, axis=0)
+        max_deflection_per_blade = np.max(max_deflection_table, axis=1)
+        max_deflection = np.max(max_deflection_table)
+        mean_deflection_per_simulation = np.mean(mean_deflection_table, axis=0)
+        mean_deflection_per_blade = np.mean(mean_deflection_table, axis=1)
+        mean_deflection = np.mean(mean_deflection_table)
 
         # Write outputs.
         outputs['max_TipDxc_towerPassing'] = max_deflection
         outputs['max_TipDxc1_towerPassing'] = max_deflection_per_blade[0]
         outputs['max_TipDxc2_towerPassing'] = max_deflection_per_blade[1]
         outputs['max_TipDxc3_towerPassing'] = max_deflection_per_blade[2]
+        outputs['mean_TipDxc_towerPassing'] = mean_deflection
+        outputs['mean_TipDxc1_towerPassing'] = mean_deflection_per_blade[0]
+        outputs['mean_TipDxc2_towerPassing'] = mean_deflection_per_blade[1]
+        outputs['mean_TipDxc3_towerPassing'] = mean_deflection_per_blade[2]
 
         # Create tip deflection summary for YAML export        
         tip_deflection_summary = {
@@ -2616,14 +2633,22 @@ class FASTLoadCases(ExplicitComponent):
             'max_TipDxc1_towerPassing': outputs['max_TipDxc1_towerPassing'],
             'max_TipDxc2_towerPassing': outputs['max_TipDxc2_towerPassing'],
             'max_TipDxc3_towerPassing': outputs['max_TipDxc3_towerPassing'],
+            'mean_TipDxc_towerPassing': outputs['mean_TipDxc_towerPassing'],
+            'mean_TipDxc1_towerPassing': outputs['mean_TipDxc1_towerPassing'],
+            'mean_TipDxc2_towerPassing': outputs['mean_TipDxc2_towerPassing'],
+            'mean_TipDxc3_towerPassing': outputs['mean_TipDxc3_towerPassing'],
             # Then for each simulation.
             'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
             'DLC_name': [c.label for c in dlc_generator.cases],
             'max_deflection_per_simulation': max_deflection_per_simulation.tolist(),
-            'max_deflection_blade_1_table': deflection_table[0].tolist(),
-            'max_deflection_blade_2_table': deflection_table[1].tolist(),
-            'max_deflection_blade_3_table': deflection_table[2].tolist(),
+            'max_deflection_blade_1_table': max_deflection_table[0].tolist(),
+            'max_deflection_blade_2_table': max_deflection_table[1].tolist(),
+            'max_deflection_blade_3_table': max_deflection_table[2].tolist(),
+            'mean_deflection_per_simulation': mean_deflection_per_simulation.tolist(),
+            'mean_deflection_blade_1_table': mean_deflection_table[0].tolist(),
+            'mean_deflection_blade_2_table': mean_deflection_table[1].tolist(),
+            'mean_deflection_blade_3_table': mean_deflection_table[2].tolist(),
         }
         
         # Save to YAML file

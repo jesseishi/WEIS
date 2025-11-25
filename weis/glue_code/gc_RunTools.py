@@ -35,6 +35,8 @@ class Outputs_2_Screen(om.ExplicitComponent):
         self.add_input('IPC_Kp1p',      val=0.0, units='s')
         self.add_input('IPC_Ki1p',      val=0.0,)
         self.add_input('TCIPC_MaxTipDeflection', val=0.0, units='m')
+        self.add_input('TCIPC_nHarmonics', val=0.0)
+        self.add_input('TCIPC_ZeroYawDeflection', val=0.0)
         self.add_input('max_TipDxc_towerPassing', val=0.0, units='m')
         self.add_input('tip_deflection',val=0.0, units='m')
         self.add_input('te_flap_end'   ,val=np.zeros(n_te_flaps))
@@ -79,8 +81,10 @@ class Outputs_2_Screen(om.ExplicitComponent):
                 print('IPC Ki1p = {:2.3e}'.format(inputs['IPC_Ki1p'][0]))
 
             # TCIPC
-            if self.options['opt_options']['design_variables']['control']['servo']['tcipc_control']['TCIPC_MaxTipDeflection']:
+            if self.options['opt_options']['design_variables']['control']['servo']['tcipc_control']:
                 print('TCIPC TCIPC_MaxTipDeflection = {:.1f}'.format(inputs['TCIPC_MaxTipDeflection'][0]))
+                print('TCIPC_nHarmonics = {:.0f}'.format(inputs['TCIPC_nHarmonics'][0]))
+                print('TCIPC_ZeroYawDeflection = {:.0f}'.format(inputs['TCIPC_ZeroYawDeflection'][0]))
            
             # Flaps
             if self.options['opt_options']['design_variables']['control']['flaps']['te_flap_end']['flag']:
