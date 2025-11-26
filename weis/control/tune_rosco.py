@@ -227,9 +227,9 @@ class TuneROSCO(ExplicitComponent):
         rosco_init_options['ps_percent']  = float(inputs['ps_percent'][0])
         rosco_init_options['IPC_Kp1p']    = max(0.0, float(inputs['IPC_Kp1p'][0]))
         rosco_init_options['IPC_Ki1p']    = max(0.0, float(inputs['IPC_Ki1p'][0]))
-        rosco_init_options['TCIPC_MaxTipDeflection'] = float(inputs['TCIPC_MaxTipDeflection'])
-        rosco_init_options['TCIPC_nHarmonics'] = float(inputs['TCIPC_nHarmonics'])
-        rosco_init_options['TCIPC_ZeroYawDeflection'] = float(inputs['TCIPC_ZeroYawDeflection'])
+        rosco_init_options['TCIPC_MaxTipDeflection'] = float(inputs['TCIPC_MaxTipDeflection'][0])
+        rosco_init_options['TCIPC_nHarmonics'] = float(inputs['TCIPC_nHarmonics'][0])
+        rosco_init_options['TCIPC_ZeroYawDeflection'] = float(inputs['TCIPC_ZeroYawDeflection'][0])
         rosco_init_options['IPC_Kp2p']    = 0.0 # 2P optimization is not currently supported
         rosco_init_options['IPC_Kp2p']    = 0.0
 
