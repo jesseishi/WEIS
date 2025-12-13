@@ -2536,11 +2536,13 @@ class FASTLoadCases(ExplicitComponent):
     def get_tower_clearance(self, dlc_generator, outputs):
         """
         Calculate the blade deflection and tower clearance when each blade passes in
-        front of the tower.
+        front of the tower using interpolation at exact azimuth angles.
+        
+        This method interpolates tip deflection values at the exact moment each blade
+        crosses the tower (180°, 60°, and 300° for blades 1, 2, and 3 respectively).
+        Linear interpolation is used between adjacent timesteps to determine the
+        precise tip deflection at these azimuth positions.
         """
-        # TODO: Currently just blade deflection, add tower clearance calculation (isn't
-        # there an openfast output for tower clearance?)
-        # TODO: This assumes a turbine with 3 blades.
         
         # Make a directory and filename to save these results to.
         save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
@@ -2549,13 +2551,11 @@ class FASTLoadCases(ExplicitComponent):
         logging.info(f"Doing tower clearance analysis, saving to {fname}")
         print(f"Doing tower clearance analysis, saving to {fname}")
 
-        # Setup the azimuth ranges for each blade where we define it as being in front
-        # of the tower (175° < azimuth < 185°).
-        HALVE_RANGE = 5
+        # Define the azimuth angles where each blade passes the tower.
         tower_azimuth_per_blade = {
-            1: (180-HALVE_RANGE, 180+HALVE_RANGE),
-            2: (60-HALVE_RANGE, 60+HALVE_RANGE),
-            3: (300-HALVE_RANGE, 300+HALVE_RANGE)
+            1: 180.0,  # Blade 1 passes tower at 180°
+            2: 60.0,   # Blade 2 passes tower at 60°
+            3: 300.0   # Blade 3 passes tower at 300°
         }
 
         # Store the results for each blade and each simulation.
@@ -2563,8 +2563,8 @@ class FASTLoadCases(ExplicitComponent):
         mean_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         case_names = []
 
-        # Go through all the simulations and store the deflection for each blade at the
-        # tower passing.
+        # Go through all the simulations and interpolate deflection at exact tower
+        # passing angles for each blade.
         for i_ts, timeseries in enumerate(self.cruncher.outputs):
 
             name = os.path.splitext(os.path.basename(timeseries.filepath))[0]
@@ -2573,33 +2573,40 @@ class FASTLoadCases(ExplicitComponent):
             # Loop through the blades.
             for i_blade in range(self.n_blades):
 
-                # Get the azimuth position that we define as this blade being in front
-                # of the tower and make a mask to get the part of the timeseries
-                # corresponding to this.
-                azimuth_min, azimuth_max = tower_azimuth_per_blade[i_blade+1]
-                azimuth = timeseries.df['Azimuth']
-                tower_passage_mask = (azimuth > azimuth_min) & (azimuth < azimuth_max)
+                # Get the exact azimuth angle where this blade passes the tower.
+                target_azimuth = tower_azimuth_per_blade[i_blade+1]
+                
+                # Extract azimuth and tip deflection timeseries.
+                azimuth = np.asarray(timeseries.df['Azimuth'])
+                tip_deflection = np.asarray(timeseries.df[f'TipDxc{i_blade+1}'])
+                
+                # Find all crossings where azimuth passes through the target angle.
+                interpolated_values = []
+                for i in range(len(azimuth) - 1):
+                    az_curr = azimuth[i]
+                    az_next = azimuth[i + 1]
+                    
+                    # Check if we cross the target azimuth going upward.
+                    if az_curr < target_azimuth <= az_next:
+                        # Linear interpolation: find tip deflection at exact target azimuth.
+                        fraction = (target_azimuth - az_curr) / (az_next - az_curr)
+                        interp_value = tip_deflection[i] + fraction * (tip_deflection[i + 1] - tip_deflection[i])
+                        interpolated_values.append(interp_value)
 
-                # Extract the blade deflection at the tower passing.
-                tip_deflection = timeseries.df[f'TipDxc{i_blade+1}']
-                tip_deflection_tower_passing = tip_deflection[tower_passage_mask]
-
-                # Depending on if we had a tower passing, store the result or warn the
-                # user.
-                if tip_deflection_tower_passing.size == 0:
-                    # Apparently we didn't pass the tower. This can happen when we do a
-                    # test run but also when something went wrong so let's warn the user
-                    # about it.
+                # Store results based on whether we found any tower passages.
+                if len(interpolated_values) == 0:
+                    # No tower passages found. This can happen for short simulations or 
+                    # when something went wrong, so warn the user.
                     logging.warning(f"No tower passage found for blade {i_blade+1} in simulation {i_ts}. The TipDxc{i_blade+1} is set to 0.")
                     
-                    # And we use a value of zero.
+                    # Use a value of zero.
                     max_deflection_table[i_blade][i_ts] = 0.0
                     mean_deflection_table[i_blade][i_ts] = 0.0
 
                 else:
-                    # Everything went fine, let's store the maximum and mean deflection.
-                    max_deflection_table[i_blade][i_ts] = np.max(tip_deflection_tower_passing)
-                    mean_deflection_table[i_blade][i_ts] = np.mean(tip_deflection_tower_passing)
+                    # Store the maximum and mean of the interpolated values at each tower passage.
+                    max_deflection_table[i_blade][i_ts] = np.max(interpolated_values)
+                    mean_deflection_table[i_blade][i_ts] = np.mean(interpolated_values)
 
         # Extract some statistics.
         max_deflection_blade_1 = np.max(max_deflection_table[0])
