@@ -498,16 +498,10 @@ class FASTLoadCases(ExplicitComponent):
 
         # Blade outputs
         self.add_output('max_TipDxc', val=0.0, units='m', desc='Maximum of channel TipDxc, i.e. out of plane tip deflection. For upwind rotors, the max value is tower the tower')
-        # I also use the max_TipDxc_towerPassing as objective/constraint, so it's nice
-        # to add a ref value so the optimizer can scale.
+        # Adding a ref value helps the optimizer scale the objective/constraint.
         self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
-        self.add_output('max_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
-        self.add_output('max_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
-        self.add_output('max_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
-        self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
-        self.add_output('mean_TipDxc1_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc1 around the tower crossing.')
-        self.add_output('mean_TipDxc2_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc2 around the tower crossing.')
-        self.add_output('mean_TipDxc3_towerPassing', val=0.0, units='m', desc='Maximum of channel TipDxc3 around the tower crossing.')
+        self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing.')
+        self.add_output('TCIPC_amplitude_at_max_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude when maximum tip deflection occurs at tower passing.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
@@ -2535,130 +2529,164 @@ class FASTLoadCases(ExplicitComponent):
 
     def get_tower_clearance(self, dlc_generator, outputs):
         """
-        Calculate the blade deflection and tower clearance when each blade passes in
+        Calculate blade deflection and tower clearance when each blade passes in
         front of the tower using interpolation at exact azimuth angles.
         
-        This method interpolates tip deflection values at the exact moment each blade
-        crosses the tower (180°, 60°, and 300° for blades 1, 2, and 3 respectively).
-        Linear interpolation is used between adjacent timesteps to determine the
-        precise tip deflection at these azimuth positions.
+        This method also computes the TCIPC pitch amplitude at the moment of maximum
+        deflection to assess controller saturation. Linear interpolation is used between
+        adjacent timesteps to determine precise values at tower-passing positions.
         """
         
-        # Make a directory and filename to save these results to.
+        def interpolate_at_tower_passing(azimuth, signal, target_azimuth):
+            """
+            Interpolate signal values at exact tower-passing azimuth angles.
+            
+            This function finds all instances where the azimuth crosses the target
+            angle and linearly interpolates the signal value at that exact moment.
+            """
+            interpolated_values = []
+            for i in range(len(azimuth) - 1):
+                az_curr = azimuth[i]
+                az_next = azimuth[i + 1]
+                
+                # Check if we cross the target azimuth going upward.
+                if az_curr < target_azimuth <= az_next:
+                    fraction = (target_azimuth - az_curr) / (az_next - az_curr)
+                    interp_value = signal[i] + fraction * (signal[i + 1] - signal[i])
+                    interpolated_values.append(interp_value)
+            
+            return interpolated_values
+        
+        def compute_tcipc_amplitude_timeseries(pitch1_ts, pitch2_ts, pitch3_ts):
+            """
+            Compute TCIPC pitch amplitude timeseries from three blade pitch signals.
+            """
+            mu = (pitch1_ts + pitch2_ts + pitch3_ts) / 3.0
+            y1 = pitch1_ts - mu
+            y2 = pitch2_ts - mu
+            y3 = pitch3_ts - mu
+            amplitude_ts = np.sqrt((2.0 / 3.0) * (y1**2 + y2**2 + y3**2))
+            return amplitude_ts
+        
+        # Create output directory for this iteration.
         save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
         os.makedirs(save_dir, exist_ok=True)
         fname = os.path.join(save_dir, 'tip_deflection_summary.yaml')
         logging.info(f"Doing tower clearance analysis, saving to {fname}")
         print(f"Doing tower clearance analysis, saving to {fname}")
 
-        # Define the azimuth angles where each blade passes the tower.
+        # Define azimuth angles where each blade passes the tower.
         tower_azimuth_per_blade = {
-            1: 180.0,  # Blade 1 passes tower at 180°
-            2: 60.0,   # Blade 2 passes tower at 60°
-            3: 300.0   # Blade 3 passes tower at 300°
+            1: 180.0,
+            2: 60.0,  
+            3: 300.0
         }
 
-        # Store the results for each blade and each simulation.
+        # Initialize result tables for deflection and TCIPC amplitude.
         max_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         mean_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
+        tcipc_amplitude_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         case_names = []
 
-        # Go through all the simulations and interpolate deflection at exact tower
-        # passing angles for each blade.
+        # Process each simulation to extract tower-passing statistics.
         for i_ts, timeseries in enumerate(self.cruncher.outputs):
 
             name = os.path.splitext(os.path.basename(timeseries.filepath))[0]
             case_names.append(name)
 
-            # Loop through the blades.
+            # Extract all required signals from the dataframe at once.
+            azimuth = np.asarray(timeseries.df['Azimuth'])
+            tip_deflections = [
+                np.asarray(timeseries.df['TipDxc1']),
+                np.asarray(timeseries.df['TipDxc2']),
+                np.asarray(timeseries.df['TipDxc3'])
+            ]
+            blade_pitches = [
+                np.asarray(timeseries.df['BldPitch1']),
+                np.asarray(timeseries.df['BldPitch2']),
+                np.asarray(timeseries.df['BldPitch3'])
+            ]
+
+            # Compute TCIPC amplitude so we can check the TCIPC amplitude at the tower
+            # passing events.
+            tcipc_amplitude_ts = compute_tcipc_amplitude_timeseries(
+                blade_pitches[0], blade_pitches[1], blade_pitches[2]
+            )
+
+            # Process each blade to find deflection and TCIPC amplitude at tower passing.
             for i_blade in range(self.n_blades):
 
-                # Get the exact azimuth angle where this blade passes the tower.
-                target_azimuth = tower_azimuth_per_blade[i_blade+1]
+                target_azimuth = tower_azimuth_per_blade[i_blade + 1]
                 
-                # Extract azimuth and tip deflection timeseries.
-                azimuth = np.asarray(timeseries.df['Azimuth'])
-                tip_deflection = np.asarray(timeseries.df[f'TipDxc{i_blade+1}'])
-                
-                # Find all crossings where azimuth passes through the target angle.
-                interpolated_values = []
-                for i in range(len(azimuth) - 1):
-                    az_curr = azimuth[i]
-                    az_next = azimuth[i + 1]
-                    
-                    # Check if we cross the target azimuth going upward.
-                    if az_curr < target_azimuth <= az_next:
-                        # Linear interpolation: find tip deflection at exact target azimuth.
-                        fraction = (target_azimuth - az_curr) / (az_next - az_curr)
-                        interp_value = tip_deflection[i] + fraction * (tip_deflection[i + 1] - tip_deflection[i])
-                        interpolated_values.append(interp_value)
+                # Interpolate both tip deflection and TCIPC amplitude at tower-passing moments.
+                interpolated_deflections = interpolate_at_tower_passing(
+                    azimuth, tip_deflections[i_blade], target_azimuth
+                )
+                interpolated_tcipc = interpolate_at_tower_passing(
+                    azimuth, tcipc_amplitude_ts, target_azimuth
+                )
 
-                # Store results based on whether we found any tower passages.
-                if len(interpolated_values) == 0:
-                    # No tower passages found. This can happen for short simulations or 
-                    # when something went wrong, so warn the user.
-                    logging.warning(f"No tower passage found for blade {i_blade+1} in simulation {i_ts}. The TipDxc{i_blade+1} is set to 0.")
-                    
-                    # Use a value of zero.
+                # Handle case where no tower passages were found.
+                if len(interpolated_deflections) == 0:
+                    logging.warning(
+                        f"No tower passage found for blade {i_blade+1} in simulation {i_ts}. "
+                        f"Setting TipDxc{i_blade+1} and TCIPC amplitude to 0."
+                    )
                     max_deflection_table[i_blade][i_ts] = 0.0
                     mean_deflection_table[i_blade][i_ts] = 0.0
+                    tcipc_amplitude_table[i_blade][i_ts] = 0.0
+                    continue
 
-                else:
-                    # Store the maximum and mean of the interpolated values at each tower passage.
-                    max_deflection_table[i_blade][i_ts] = np.max(interpolated_values)
-                    mean_deflection_table[i_blade][i_ts] = np.mean(interpolated_values)
+                # Store deflection statistics for this blade and simulation.
+                max_deflection_table[i_blade][i_ts] = np.max(interpolated_deflections)
+                mean_deflection_table[i_blade][i_ts] = np.mean(interpolated_deflections)
 
-        # Extract some statistics.
-        max_deflection_blade_1 = np.max(max_deflection_table[0])
-        max_deflection_blade_2 = np.max(max_deflection_table[1])
-        max_deflection_blade_3 = np.max(max_deflection_table[2])
-        mean_deflection_blade_1 = np.mean(mean_deflection_table[0])
-        mean_deflection_blade_2 = np.mean(mean_deflection_table[1])
-        mean_deflection_blade_3 = np.mean(mean_deflection_table[2])
+                # Store TCIPC amplitude at the moment of maximum deflection.
+                # This helps assess whether the controller is saturating during critical events.
+                idx_max_deflection = np.argmax(interpolated_deflections)
+                tcipc_amplitude_table[i_blade][i_ts] = interpolated_tcipc[idx_max_deflection]
 
+        # Extract overall statistics across all blades and simulations.
         max_deflection_per_simulation = np.max(max_deflection_table, axis=0)
-        max_deflection_per_blade = np.max(max_deflection_table, axis=1)
         max_deflection = np.max(max_deflection_table)
-        mean_deflection_per_simulation = np.mean(mean_deflection_table, axis=0)
-        mean_deflection_per_blade = np.mean(mean_deflection_table, axis=1)
         mean_deflection = np.mean(mean_deflection_table)
+
+        # Find TCIPC amplitude corresponding to the maximum deflection event.
+        # This identifies which blade and simulation had the worst case.
+        idx_blade_max, idx_sim_max = np.unravel_index(
+            np.argmax(max_deflection_table), max_deflection_table.shape
+        )
+        tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_max, idx_sim_max]
 
         # Write outputs.
         outputs['max_TipDxc_towerPassing'] = max_deflection
-        outputs['max_TipDxc1_towerPassing'] = max_deflection_per_blade[0]
-        outputs['max_TipDxc2_towerPassing'] = max_deflection_per_blade[1]
-        outputs['max_TipDxc3_towerPassing'] = max_deflection_per_blade[2]
         outputs['mean_TipDxc_towerPassing'] = mean_deflection
-        outputs['mean_TipDxc1_towerPassing'] = mean_deflection_per_blade[0]
-        outputs['mean_TipDxc2_towerPassing'] = mean_deflection_per_blade[1]
-        outputs['mean_TipDxc3_towerPassing'] = mean_deflection_per_blade[2]
+        outputs['TCIPC_amplitude_at_max_deflection'] = tcipc_amplitude_at_max
 
-        # Create tip deflection summary for YAML export        
+        # Create summary dictionary for YAML export.
         tip_deflection_summary = {
-            # First some statistics over all the runs.
-            'max_TipDxc_towerPassing': outputs['max_TipDxc_towerPassing'],
-            'max_TipDxc1_towerPassing': outputs['max_TipDxc1_towerPassing'],
-            'max_TipDxc2_towerPassing': outputs['max_TipDxc2_towerPassing'],
-            'max_TipDxc3_towerPassing': outputs['max_TipDxc3_towerPassing'],
-            'mean_TipDxc_towerPassing': outputs['mean_TipDxc_towerPassing'],
-            'mean_TipDxc1_towerPassing': outputs['mean_TipDxc1_towerPassing'],
-            'mean_TipDxc2_towerPassing': outputs['mean_TipDxc2_towerPassing'],
-            'mean_TipDxc3_towerPassing': outputs['mean_TipDxc3_towerPassing'],
-            # Then for each simulation.
+            # Overall statistics across all simulations and blades.
+            'max_TipDxc_towerPassing': float(max_deflection),
+            'mean_TipDxc_towerPassing': float(mean_deflection),
+            'TCIPC_amplitude_at_max_deflection': float(tcipc_amplitude_at_max),
+            # Per-simulation data for detailed analysis.
             'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
             'DLC_name': [c.label for c in dlc_generator.cases],
             'max_deflection_per_simulation': max_deflection_per_simulation.tolist(),
+            'mean_deflection_per_simulation': np.mean(mean_deflection_table, axis=0).tolist(),
+            # Per-blade, per-simulation data for detailed debugging.
             'max_deflection_blade_1_table': max_deflection_table[0].tolist(),
             'max_deflection_blade_2_table': max_deflection_table[1].tolist(),
             'max_deflection_blade_3_table': max_deflection_table[2].tolist(),
-            'mean_deflection_per_simulation': mean_deflection_per_simulation.tolist(),
             'mean_deflection_blade_1_table': mean_deflection_table[0].tolist(),
             'mean_deflection_blade_2_table': mean_deflection_table[1].tolist(),
             'mean_deflection_blade_3_table': mean_deflection_table[2].tolist(),
+            'tcipc_amplitude_blade_1_table': tcipc_amplitude_table[0].tolist(),
+            'tcipc_amplitude_blade_2_table': tcipc_amplitude_table[1].tolist(),
+            'tcipc_amplitude_blade_3_table': tcipc_amplitude_table[2].tolist(),
         }
         
-        # Save to YAML file
         write_yaml(tip_deflection_summary, fname)
         
         return outputs
