@@ -34,6 +34,8 @@ class IEC_CoherentGusts():
             self.Ramp(dlc, wind_file_name)
         elif dlc.IEC_WindType.split('-')[-1] == 'Step':
             self.Step(dlc, wind_file_name)
+        elif dlc.IEC_WindType.split('-')[-1] == 'Steps':
+            self.Steps(dlc, wind_file_name)
         elif dlc.IEC_WindType == 'Custom':
             wind_file_name = dlc.wind_file
         else:
@@ -274,6 +276,43 @@ class IEC_CoherentGusts():
         data = np.column_stack((t, V, V_dir, V_vert, shear_horz, shear_vert, shear_vert_lin, V_gust, upflow))
         # Header
         hd = f'! Step wind starting from wind speed = {dlc.URef} to wind speed = {dlc.wind_speed+dlc.step_speeddelta}\n'
+        self.write_wnd(wind_file_name, data, hd)
+
+    def Steps(self, dlc, wind_file_name):
+        # Instead of a single wind speed step, we do multiple evenly spaced steps
+        # between the cut in and cut out wind speed.
+
+        t = np.array([])
+        V = np.array([])
+
+        wind_speeds = np.arange(dlc.ws_cut_in, dlc.ws_cut_out + 1e-3, dlc.steps_speeddelta)
+        for i, wind_speed in enumerate(wind_speeds):
+
+            t_start = dlc.steps_time * i + dlc.steps_transition_time
+            t_end =   dlc.steps_time * (i+1)
+            
+            # Add the next step.
+            t = np.append(t, [t_start, t_end])
+            V = np.append(V, [wind_speed, wind_speed])
+
+        if (t_end + dlc.transient_time) > self.TF:
+            raise Exception(f"Not enough time to fit in all the wind steps. Have {self.TF}, require {t_end + dlc.transient_time}.")
+        elif (t_end + dlc.transient_time) == self.TF:
+            Warning("Too much analysis time for the steps.")
+
+        # Now make the other variables that are required for the .wnd file.
+        V_dir = np.zeros_like(t)
+        V_vert = np.zeros_like(t)
+        shear_horz = np.zeros_like(t)
+        shear_vert = np.zeros_like(t)
+        shear_vert_lin = np.zeros_like(t)
+        V_gust = np.zeros_like(t)
+        upflow = np.zeros_like(t)
+
+        # And bundle up and write.
+        data = np.column_stack((t, V, V_dir, V_vert, shear_horz, shear_vert, shear_vert_lin, V_gust, upflow))
+        # Header
+        hd = f'! Wind steps from {dlc.ws_cut_in} to {dlc.ws_cut_out} with stepsize {dlc.steps_speeddelta}\n'
         self.write_wnd(wind_file_name, data, hd)
 
     def read_wnd(self, wnd_file):

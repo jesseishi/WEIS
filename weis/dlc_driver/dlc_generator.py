@@ -464,6 +464,14 @@ class DLCGenerator(object):
             elif dlc_options['IEC_WindType'].split('-')[-1] == 'Step':
                 idlc.step_speeddelta = dlc_options['step_speeddelta']
                 idlc.gust_wait_time = dlc_options['gust_wait_time']
+            elif dlc_options['IEC_WindType'].split('-')[-1] == 'Steps':
+                idlc.gust_wait_time = 0  # Not needed to offset the start time.
+                idlc.ws_cut_in = self.ws_cut_in
+                idlc.ws_cut_out = self.ws_cut_out
+                idlc.steps_speeddelta = dlc_options['steps_speeddelta']
+                idlc.steps_transition_time = dlc_options['steps_transition_time']
+                idlc.steps_time = dlc_options['steps_time']
+                pass
             elif dlc_options['IEC_WindType'] == 'Steady':
                 pass
             else:
@@ -1883,6 +1891,51 @@ class DLCGenerator(object):
         # These options should be the same length and we will generate a matrix of all cases
         generic_case_inputs = []
         generic_case_inputs.append(['wake_mod','wave_model'])  # group 0, (usually constants) turbine variables, DT, aero_modeling
+        generic_case_inputs.append(['wind_speed','wave_height','wave_period', 'wind_seed', 'wave_seed']) # group 1, initial conditions will be added here, define some method that maps wind speed to ICs and add those variables to this group
+        generic_case_inputs.append(['yaw_misalign']) # group 2
+
+        self.generate_cases(generic_case_inputs,dlc_options)
+
+    def generate_steps(self, dlc_options):
+        # Power production step wind
+
+        # Get default options
+        dlc_options.update(self.default_options)   
+        
+        # DLC Specific options:
+        dlc_options['label'] = 'steps'
+        dlc_options['sea_state'] = 'normal'
+        dlc_options['IEC_WindType'] = 'Steps'
+        
+        # Normally the DLC generator generates over multiple wind speeds, but we do all
+        # the wind speeds in steps in one wind file. So ensure that we don't loop over
+        # different wind speeds.
+        dlc_options['wind_speed'] = [0]
+
+        if dlc_options['turbulent_wind']['flag']:
+            raise NotImplementedError("Turbulent steps not yet implemented.")
+            # dlc_options['IEC_WindType'] = 'Turbulent-Step'
+        else:
+            dlc_options['IEC_WindType'] = 'Steps'
+
+        
+
+        # Set yaw_misalign, else default
+        if 'yaw_misalign' in dlc_options:
+            dlc_options['yaw_misalign'] = dlc_options['yaw_misalign']
+        else: # default
+            dlc_options['yaw_misalign'] = [0]
+        
+        dlc_options['PLExp_windtype1'] = dlc_options.get('PLExp_windtype1',0.12)     # Use user input, otherwise disabled
+
+        # Check options
+        # TODO        
+
+        # DLC-specific: define groups
+        # These options should be the same length and we will generate a matrix of all cases
+        generic_case_inputs = []
+        generic_case_inputs.append(['wake_mod','wave_model'])  # group 0, (usually constants) turbine variables, DT, aero_modeling
+        # generic_case_inputs.append(['wind_speed','wave_height','wave_period', 'wind_seed', 'wave_seed']) # group 1, initial conditions will be added here, define some method that maps wind speed to ICs and add those variables to this group
         generic_case_inputs.append(['wind_speed','wave_height','wave_period', 'wind_seed', 'wave_seed']) # group 1, initial conditions will be added here, define some method that maps wind speed to ICs and add those variables to this group
         generic_case_inputs.append(['yaw_misalign']) # group 2
 
