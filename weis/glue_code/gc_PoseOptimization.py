@@ -94,6 +94,14 @@ class PoseOptimizationWEIS(PoseOptimization):
             wt_opt.model.add_design_var('tune_rosco_ivc.IPC_Ki1p', lower=control_opt['servo']['ipc_control']['Ki']['min'],
                                                             upper=control_opt['servo']['ipc_control']['Ki']['max'],
                                                             ref=control_opt['servo']['ipc_control']['Kp']['ref'])
+        if control_opt['servo']['setpoint_ipc']['SetpointIPC_Tilt_k']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.SetpointIPC_Tilt_k', lower=control_opt['servo']['setpoint_ipc']['SetpointIPC_Tilt_k']['min'], 
+                                                            upper=control_opt['servo']['setpoint_ipc']['SetpointIPC_Tilt_k']['max'],
+                                                            ref=control_opt['servo']['setpoint_ipc']['SetpointIPC_Tilt_k']['ref'])
+        if control_opt['servo']['setpoint_ipc']['SetpointIPC_Yaw_k']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.SetpointIPC_Yaw_k',  lower=control_opt['servo']['setpoint_ipc']['SetpointIPC_Yaw_k']['min'],
+                                                            upper=control_opt['servo']['setpoint_ipc']['SetpointIPC_Yaw_k']['max'],
+                                                            ref=control_opt['servo']['setpoint_ipc']['SetpointIPC_Yaw_k']['ref'])
         if control_opt['servo']['pitch_control']['stability_margin']['flag']:
             wt_opt.model.add_design_var('tune_rosco_ivc.stability_margin', lower=control_opt['servo']['pitch_control']['stability_margin']['min'],
                                                             upper=control_opt['servo']['pitch_control']['stability_margin']['max'])

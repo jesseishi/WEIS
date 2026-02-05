@@ -184,6 +184,8 @@ class TuneROSCO(ExplicitComponent):
             self.add_input('flp_tau',       val=0.0,            units='s',              desc='Flap controller integral gain time constant')
         self.add_input('IPC_Kp1p',          val=0.0,            units='s',              desc='Individual pitch controller 1p proportional gain')
         self.add_input('IPC_Ki1p',          val=0.0,                                    desc='Individual pitch controller 1p integral gain')
+        self.add_input('SetpointIPC_Tilt_k', val=np.zeros(rosco_init_options['SetpointIPC_nHarmonics']), desc='Setpoint IPC tilt amplitudes for different harmonics.')
+        self.add_input('SetpointIPC_Yaw_k',  val=np.zeros(rosco_init_options['SetpointIPC_nHarmonics']), desc='Setpoint IPC yaw amplitudes for different harmonics.')
         # Outputs for constraints and optimizations
         self.add_output('flptune_coeff1',   val=0.0,            units='rad/s',          desc='First coefficient in denominator of flap controller tuning model')
         self.add_output('flptune_coeff2',   val=0.0,            units='(rad/s)**2',     desc='Second coefficient in denominator of flap controller tuning model')
@@ -233,6 +235,10 @@ class TuneROSCO(ExplicitComponent):
         rosco_init_options['IPC_Ki1p']    = max(0.0, float(inputs['IPC_Ki1p'][0]))
         rosco_init_options['IPC_Kp2p']    = 0.0 # 2P optimization is not currently supported
         rosco_init_options['IPC_Kp2p']    = 0.0
+
+        # Setpoint IPC. Note that these are arrays.
+        rosco_init_options['SetpointIPC_Tilt_k'] = inputs['SetpointIPC_Tilt_k']
+        rosco_init_options['SetpointIPC_Yaw_k'] = inputs['SetpointIPC_Yaw_k']
 
         if rosco_init_options['Flp_Mode'] > 0:
             rosco_init_options['flp_maxpit']  = float(inputs['delta_max_pos'][0])

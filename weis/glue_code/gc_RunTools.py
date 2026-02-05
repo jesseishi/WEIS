@@ -1,8 +1,5 @@
-import os
-import matplotlib.pyplot as plt
 import openmdao.api as om
 import numpy as np
-from openmdao.utils.mpi import MPI
 
 class Outputs_2_Screen(om.ExplicitComponent):
     # Class to print outputs on screen
@@ -34,6 +31,8 @@ class Outputs_2_Screen(om.ExplicitComponent):
         self.add_input('flp_tau',       val=0.0, units='s')
         self.add_input('IPC_Kp1p',      val=0.0, units='s')
         self.add_input('IPC_Ki1p',      val=0.0,)
+        self.add_input('SetpointIPC_Tilt_k', val=np.zeros(modeling_options['ROSCO']['SetpointIPC_nHarmonics']))
+        self.add_input('SetpointIPC_Yaw_k', val=np.zeros(modeling_options['ROSCO']['SetpointIPC_nHarmonics']))
         self.add_input('tip_deflection',val=0.0, units='m')
         self.add_input('te_flap_end'   ,val=np.zeros(n_te_flaps))
         self.add_input('rotor_overspeed',val=0.0)
@@ -74,6 +73,12 @@ class Outputs_2_Screen(om.ExplicitComponent):
                 print('IPC Ki1p = {:2.3e}'.format(inputs['IPC_Kp1p'][0]))
             if self.options['opt_options']['design_variables']['control']['servo']['ipc_control']['Ki']:
                 print('IPC Ki1p = {:2.3e}'.format(inputs['IPC_Ki1p'][0]))
+
+            # Setpoint IPC
+            if self.options['opt_options']['design_variables']['control']['servo']['setpoint_ipc']['SetpointIPC_Tilt_k']['flag']:
+                print('SetpointIPC_Tilt_k = [{}]'.format(', '.join(f'{x:2.3e}' for x in inputs['SetpointIPC_Tilt_k'])))
+            if self.options['opt_options']['design_variables']['control']['servo']['setpoint_ipc']['SetpointIPC_Yaw_k']['flag']:
+                print('SetpointIPC_Yaw_k = [{}]'.format(', '.join(f'{x:2.3e}' for x in inputs['SetpointIPC_Yaw_k'])))
            
             # Flaps
             if self.options['opt_options']['design_variables']['control']['flaps']['te_flap_end']['flag']:

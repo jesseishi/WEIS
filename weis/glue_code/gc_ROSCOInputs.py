@@ -27,6 +27,11 @@ def assign_ROSCO_values(wt_opt, modeling_options, opt_options):
         wt_opt["tune_rosco_ivc.IPC_Kp1p"] = rosco_init_options["IPC_Kp1p"]
         wt_opt["tune_rosco_ivc.IPC_Ki1p"] = rosco_init_options["IPC_Ki1p"]
 
+    # Setpoint IPC
+    if rosco_init_options["SetpointIPC_Mode"]:
+        wt_opt["tune_rosco_ivc.SetpointIPC_Tilt_k"] = rosco_init_options["SetpointIPC_Tilt_k"]
+        wt_opt["tune_rosco_ivc.SetpointIPC_Yaw_k"] = rosco_init_options["SetpointIPC_Yaw_k"]
+
     # Robust controller tuning
     if opt_options["design_variables"]["control"]["servo"]["pitch_control"]["stability_margin"]["flag"]:
         wt_opt["tune_rosco_ivc.stability_margin"] = rosco_init_options["linmodel_tuning"]["stability_margin"]

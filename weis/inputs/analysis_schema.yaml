@@ -266,6 +266,51 @@ properties:
                                                 maximum: 1.e+3
                                                 unit: none
                                             ref: *ipc_ref
+                            setpoint_ipc:
+                                type: object
+                                default: {}
+                                properties:
+                                    SetpointIPC_Tilt_k:
+                                        type: object
+                                        default: {}
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [0.0]
+                                            max:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [1.0]
+                                            ref:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [1.0]
+                                    SetpointIPC_Yaw_k:
+                                        type: object
+                                        default: {}
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [0.0]
+                                            max:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [1.0]
+                                            ref:
+                                                type: array
+                                                items:
+                                                    type: number
+                                                default: [1.0]
+
             TMDs:
                 type: object
                 description: Design variables associated with TMDs
