@@ -83,7 +83,12 @@ def run_weis(fname_wt_input, fname_modeling_options, fname_opt_options,
                 modeling_options['General']['openfast_configuration']['mpi_run'] = True
                 modeling_options['General']['openfast_configuration']['mpi_comm_map_down'] = comm_map_down
                 if opt_options['driver']['design_of_experiments']['flag']:
-                    modeling_options['General']['openfast_configuration']['cores'] = 1
+                    # DOEs parallelize per sample, not per OpenFAST case that we need to
+                    # run. To also parallelize per OpenFAST run we can increase the
+                    # amount of threads that each process uses.
+                    cores_per_task = int(os.environ.get('SLURM_CPUS_PER_TASK', 1))
+                    print(f"{cores_per_task=} (within this MPI process).")
+                    modeling_options['General']['openfast_configuration']['cores'] = cores_per_task
                 else:
                     modeling_options['General']['openfast_configuration']['cores'] = nOFp
 
