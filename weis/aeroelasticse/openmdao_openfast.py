@@ -567,6 +567,30 @@ class FASTLoadCases(ExplicitComponent):
         # Simulation output
         self.add_output('openfast_failed', val=0.0, desc="Numerical value for whether any openfast runs failed. 0 if false, 2 if true")
         
+        # Periodic steady-state metrics
+        self.add_output('pss_convergence_metric', val=0.0, units='W', desc='Convergence metric for the periodic steady-state.')
+        self.add_output('pss_power_mean_W', val=0.0, units='W', desc='Time-average generator power during last oscillation')
+        self.add_output('pss_power_std_W', val=0.0, units='W', desc='Standard deviation of generator power during last oscillation')
+        self.add_output('pss_mech_power_mean_MW', val=0.0, units='MW', desc='Time-average mechanical power during last oscillation')
+        self.add_output('pss_mech_power_std_MW', val=0.0, units='MW', desc='Standard deviation of mechanical power during last oscillation')
+        self.add_output('pss_thrust_mean_kN', val=0.0, units='kN', desc='Time-average rotor thrust during last oscillation')
+        self.add_output('pss_thrust_std_kN', val=0.0, units='kN', desc='Standard deviation of rotor thrust during last oscillation')
+        self.add_output('pss_tower_moment_mean_kNm', val=0.0, units='kN*m', desc='Time-average tower base bending moment during last oscillation')
+        self.add_output('pss_tower_moment_std_kNm', val=0.0, units='kN*m', desc='Standard deviation of tower base bending moment during last oscillation')
+        self.add_output('pss_blade_ip_moment_mean_kNm', val=0.0, units='kN*m', desc='Time-average blade root in-plane bending moment during last oscillation')
+        self.add_output('pss_blade_ip_moment_std_kNm', val=0.0, units='kN*m', desc='Standard deviation of blade root in-plane bending moment during last oscillation')
+        self.add_output('pss_blade_op_moment_mean_kNm', val=0.0, units='kN*m', desc='Time-average blade root out-of-plane bending moment during last oscillation')
+        self.add_output('pss_blade_op_moment_std_kNm', val=0.0, units='kN*m', desc='Standard deviation of blade root out-of-plane bending moment during last oscillation')
+        self.add_output('pss_blade1_tower_deflection_m', val=0.0, units='m', desc='Blade 1 tip deflection when passing tower')
+        self.add_output('pss_blade2_tower_deflection_m', val=0.0, units='m', desc='Blade 2 tip deflection when passing tower')
+        self.add_output('pss_blade3_tower_deflection_m', val=0.0, units='m', desc='Blade 3 tip deflection when passing tower')
+        self.add_output('pss_pitch1_travel_deg', val=0.0, units='deg', desc='Total pitch travel of blade 1 during last oscillation')
+        self.add_output('pss_pitch2_travel_deg', val=0.0, units='deg', desc='Total pitch travel of blade 2 during last oscillation')
+        self.add_output('pss_pitch3_travel_deg', val=0.0, units='deg', desc='Total pitch travel of blade 3 during last oscillation')
+        self.add_output('pss_pitch1_weighted_travel_degkNm', val=0.0, desc='Moment-weighted pitch travel of blade 1 during last oscillation')
+        self.add_output('pss_pitch2_weighted_travel_degkNm', val=0.0, desc='Moment-weighted pitch travel of blade 2 during last oscillation')
+        self.add_output('pss_pitch3_weighted_travel_degkNm', val=0.0, desc='Moment-weighted pitch travel of blade 3 during last oscillation')
+        
         # Open loop to closed loop error
         if self.options['modeling_options']['OL2CL']['flag']:
             self.add_output('OL2CL_pitch', val=0.0, desc="Open loop to closed loop avarege error")
@@ -2365,6 +2389,9 @@ class FASTLoadCases(ExplicitComponent):
         if modopt['flags']['monopile']:
             outputs = self.get_monopile_loading(inputs, outputs)
 
+        if True:
+            outputs = self.get_periodic_steady_state_metrics(inputs, outputs)
+
         # If DLC 1.1 not used, calculate_AEP will just compute average power of simulations
         outputs = self.calculate_AEP(case_list, dlc_generator, discrete_inputs, outputs)
 
@@ -2633,6 +2660,102 @@ class FASTLoadCases(ExplicitComponent):
         outputs['monopile_maxMy_Mx'] = 1e-3*spline_Mx(z)
         outputs['monopile_maxMy_My'] = 1e-3*spline_My(z)
         outputs['monopile_maxMy_Mz'] = 1e-3*spline_Mz(z)
+
+        return outputs
+    
+    def get_periodic_steady_state_metrics(self, inputs, outputs):
+        # The periodic steady-state is the equilibrium where the turbine repeats its
+        # periodic solution. In this function, we evaluate whether the turbine has
+        # reached the periodic steady-state and extract some outputs based on it.
+
+        # Generally, we expect a single simulation to be ran, for which we want to
+        # calculate the periodic steady-state.
+        assert self.cruncher.noutputs == 1, f"Expected 1 simulation per design variable, got {self.cruncher.noutputs}."
+
+        df = self.cruncher.outputs[0].df
+        
+        # Unwrap azimuth to handle 360->0 degree transitions.
+        azimuth_unwrapped = np.unwrap(np.deg2rad(df["Azimuth"].values)) * 180.0 / np.pi
+        time = df["Time"].values
+
+        # Find the start of the last full oscillation (360 degrees before the end).
+        azimuth_end_unwrapped = azimuth_unwrapped[-1]
+        azimuth_start_unwrapped = azimuth_end_unwrapped - 360.0
+        t_start = np.interp(azimuth_start_unwrapped, azimuth_unwrapped, time)
+        t_end = time[-1]
+
+        # Let's first check that we have actually reached the periodic steady-state. We
+        # do this by comparing some signals at the start and end of the period. I found
+        # rotor torque to be a good indication for a converged solution.
+        rotor_torque = df["RotTorq"]
+        rotor_torque_start = np.interp(t_start, time, rotor_torque)
+        rotor_torque_end = np.interp(t_end, time, rotor_torque)
+        outputs["pss_convergence_metric"] = (rotor_torque_end - rotor_torque_start) / rotor_torque_start
+
+        # Create df_time with data from the last period.
+        # This assumes that the data is evenly spaced and has a high enough sampling
+        # rate that the average is equal to the time-weighted average.
+        mask_time = (time > t_start) & (time <= t_end)
+        df_time = df[mask_time].copy()
+
+        # Extract average and standard deviation from df_time.
+        outputs["pss_power_mean_W"] = df_time["GenPwr"].mean()
+        outputs["pss_power_std_W"] = df_time["GenPwr"].std()
+        
+        # Mechanical power: P = omega * torque.
+        # RotSpeed is in rpm, RotTorq is in kN*m.
+        omega = df_time["RotSpeed"] * 2.0 * np.pi / 60.0  # Convert to rad/s.
+        torque = df_time["RotTorq"] * 1000.0  # Convert to N*m.
+        mech_power = omega * torque  # W.
+        outputs["pss_mech_power_mean_MW"] = mech_power.mean() / 1e6
+        outputs["pss_mech_power_std_MW"] = mech_power.std() / 1e6
+        
+        # Rotor thrust.
+        outputs["pss_thrust_mean_kN"] = df_time["RotThrust"].mean()
+        outputs["pss_thrust_std_kN"] = df_time["RotThrust"].std()
+        
+        # Tower root bending moment.
+        outputs["pss_tower_moment_mean_kNm"] = df_time["TwrBsMyt"].mean()
+        outputs["pss_tower_moment_std_kNm"] = df_time["TwrBsMyt"].std()
+        
+        # Blade root bending moments (averaged across all blades).
+        rootmxb_all = np.column_stack([df_time[f"RootMxc{i}"] for i in range(1, self.n_blades + 1)])
+        rootmyb_all = np.column_stack([df_time[f"RootMyc{i}"] for i in range(1, self.n_blades + 1)])
+        outputs["pss_blade_ip_moment_mean_kNm"] = rootmxb_all.mean()
+        outputs["pss_blade_ip_moment_std_kNm"] = rootmxb_all.std()
+        outputs["pss_blade_op_moment_mean_kNm"] = rootmyb_all.mean()
+        outputs["pss_blade_op_moment_std_kNm"] = rootmyb_all.std()
+        
+        # Pitch travel and weighted pitch travel for each blade.
+        for blade_num in range(1, self.n_blades + 1):
+            pitch_signal = df_time[f"BldPitch{blade_num}"].values
+            pitch_changes = np.abs(np.diff(pitch_signal))
+            total_travel = np.sum(pitch_changes)
+            outputs[f"pss_pitch{blade_num}_travel_deg"] = total_travel
+            
+            # Weighted travel: weight by norm of root bending moments.
+            rootmxb = df_time[f"RootMxc{blade_num}"].values
+            rootmyb = df_time[f"RootMyc{blade_num}"].values
+            moment_norm = np.sqrt(rootmxb**2 + rootmyb**2)
+            # Use moment_norm at the same indices as pitch_changes (exclude last point).
+            weighted_travel = np.sum(pitch_changes * moment_norm[:-1])
+            outputs[f"pss_pitch{blade_num}_weighted_travel_degkNm"] = weighted_travel
+
+        # Besides time-based statistics, we're also interested in some specific
+        # azimuth-based events.
+        # Define when each blade passes the tower and interpolate the value.
+        tower_azimuth_per_blade = {
+            1: 180.0,
+            2: 60.0,
+            3: 300.0
+        }
+        for blade_num, tower_azimuth in tower_azimuth_per_blade.items():
+            # This interpolation assumes that df_time only has 1 oscillation, which it
+            # indeed does. The period parameter ensures that if the tower azimuth is
+            # between the start and end sample (quite unlikely) that it still
+            # interpolates correctly.
+            d = np.interp(tower_azimuth, df_time["Azimuth"], df_time[f"TipDxc{blade_num}"], period=360.0)
+            outputs[f"pss_blade{blade_num}_tower_deflection_m"] = d
 
         return outputs
 
