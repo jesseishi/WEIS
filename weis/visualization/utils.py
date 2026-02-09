@@ -385,8 +385,8 @@ def load_OMsql_multi(
                     collected_data[key].append(int(np.array(data[key][idx_key])))
                 elif isinstance(data[key][idx_key], float):
                     collected_data[key].append(float(np.array(data[key][idx_key])))
-                elif len(data[key][idx_key]) == 1:
-                    collected_data[key].append(float(np.array(data[key][idx_key])))
+                # elif len(data[key][idx_key]) == 1:
+                #     collected_data[key].append(float(np.array(data[key][idx_key])))
                     # try:
                     #     collected_data[key].append(np.array(data[key][idx_key][0]))
                     # except:
