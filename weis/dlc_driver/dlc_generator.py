@@ -817,20 +817,21 @@ class DLCGenerator(object):
         dlc_options['IEC_WindType'] = 'EWS'
         dlc_options['direction'] = ['p', 'n']
         dlc_options['shear'] = ['h', 'v']
-        
+
+        dlc_options['azimuth_init'] = np.linspace(0.,120.,dlc_options['n_azimuth'],endpoint=False)
 
         # Set yaw_misalign, else default
         if 'yaw_misalign' in dlc_options:
             dlc_options['yaw_misalign'] = dlc_options['yaw_misalign']
         else: # default
-            dlc_options['yaw_misalign'] = [0]
+            dlc_options['yaw_misalign'] = [0]*len(dlc_options['azimuth_init'])
         
         # DLC-specific: define groups
         # These options should be the same length and we will generate a matrix of all cases
         generic_case_inputs = []
         generic_case_inputs.append(['total_time','transient_time'])  # group 0, (usually constants) turbine variables, DT, aero_modeling
         generic_case_inputs.append(['wind_speed','wave_height','wave_period', 'wind_seed', 'wave_seed']) # group 1, initial conditions will be added here, define some method that maps wind speed to ICs and add those variables to this group
-        generic_case_inputs.append(['yaw_misalign']) # group 2: 
+        generic_case_inputs.append(['yaw_misalign','azimuth_init']) # group 2: 
         generic_case_inputs.append(['direction']) # group 3: 
         generic_case_inputs.append(['shear']) # group 4: 
 
