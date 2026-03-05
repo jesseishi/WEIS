@@ -502,6 +502,10 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
         self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing.')
         self.add_output('TCIPC_amplitude_at_max_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude when maximum tip deflection occurs at tower passing.')
+        # Effective (azimuth-averaged) variants for DLC 1.4/1.5.
+        self.add_output('max_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
+        self.add_output('mean_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
+        self.add_output('TCIPC_amplitude_at_max_eff_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude at the effective (azimuth-averaged) maximum tip deflection.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
@@ -2646,35 +2650,96 @@ class FASTLoadCases(ExplicitComponent):
                 idx_max_deflection = np.argmax(interpolated_deflections)
                 tcipc_amplitude_table[i_blade][i_ts] = interpolated_tcipc[idx_max_deflection]
 
-        # Extract overall statistics across all blades and simulations.
+        # Extract per-simulation statistics across blades.
         max_deflection_per_simulation = np.max(max_deflection_table, axis=0)
-        max_deflection = np.max(max_deflection_table)
-        mean_deflection = np.mean(mean_deflection_table)
+        mean_deflection_per_simulation = np.mean(mean_deflection_table, axis=0)
 
-        # Find TCIPC amplitude corresponding to the maximum deflection event.
-        # This identifies which blade and simulation had the worst case.
-        idx_blade_max, idx_sim_max = np.unravel_index(
+        # For DLC 1.4 and 1.5, multiple simulations are run per scenario that only
+        # differ in azimuth initial condition. We average the worst-case deflections
+        # across these azimuth variants rather than taking the single absolute worst,
+        # as dictated by the standards.
+        # So for DLC 1.4 and 1.5, we group over all DLC attributes, except azimuth_init
+        # and then take the statistics of those groups.
+        azimuth_avg_dlcs = {'1.4', '1.5'}
+        azimuth_groups = {}
+        for i_sim, case in enumerate(dlc_generator.cases):
+            if case.label in azimuth_avg_dlcs:
+                # Group by all attributes except azimuth_init.
+                attrs = vars(case).copy()
+                attrs.pop('azimuth_init', None)
+                key = tuple(sorted((k, str(v)) for k, v in attrs.items()))
+                azimuth_groups.setdefault(key, []).append(i_sim)
+
+        # Build effective arrays where azimuth groups are replaced by their mean.
+        eff_max_deflection_per_simulation = max_deflection_per_simulation.copy()
+        eff_mean_deflection_per_simulation = mean_deflection_per_simulation.copy()
+        for group_indices in azimuth_groups.values():
+            if len(group_indices) > 1:
+                mean_of_maxes = np.mean(max_deflection_per_simulation[group_indices])
+                mean_of_means = np.mean(mean_deflection_per_simulation[group_indices])
+                for idx in group_indices:
+                    eff_max_deflection_per_simulation[idx] = mean_of_maxes
+                    eff_mean_deflection_per_simulation[idx] = mean_of_means
+
+        # Raw overall statistics (no azimuth averaging).
+        max_deflection = np.max(max_deflection_per_simulation)
+        mean_deflection = np.mean(mean_deflection_per_simulation)
+
+        # Raw TCIPC amplitude corresponding to the absolute worst-case event.
+        idx_blade_raw, idx_sim_raw = np.unravel_index(
             np.argmax(max_deflection_table), max_deflection_table.shape
         )
-        tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_max, idx_sim_max]
+        tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_raw, idx_sim_raw]
+
+        # Effective overall statistics from the azimuth-averaged arrays.
+        eff_max_deflection = np.max(eff_max_deflection_per_simulation)
+        eff_mean_deflection = np.mean(eff_mean_deflection_per_simulation)
+
+        # Find TCIPC amplitude at the effective worst-case event.
+        idx_eff_max = np.argmax(eff_max_deflection_per_simulation)
+        eff_tcipc_amplitude_at_max = None
+        for group_indices in azimuth_groups.values():
+            if idx_eff_max in group_indices:
+                # Average TCIPC over the azimuth group, using each sim's worst blade.
+                tcipc_values = []
+                for idx in group_indices:
+                    blade_max = np.argmax(max_deflection_table[:, idx])
+                    tcipc_values.append(tcipc_amplitude_table[blade_max, idx])
+                eff_tcipc_amplitude_at_max = np.mean(tcipc_values)
+                break
+        if eff_tcipc_amplitude_at_max is None:
+            # Not in an azimuth group; use the single worst blade directly.
+            idx_blade_eff = np.argmax(max_deflection_table[:, idx_eff_max])
+            eff_tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_eff, idx_eff_max]
 
         # Write outputs.
         outputs['max_TipDxc_towerPassing'] = max_deflection
         outputs['mean_TipDxc_towerPassing'] = mean_deflection
         outputs['TCIPC_amplitude_at_max_deflection'] = tcipc_amplitude_at_max
+        outputs['max_eff_TipDxc_towerPassing'] = eff_max_deflection
+        outputs['mean_eff_TipDxc_towerPassing'] = eff_mean_deflection
+        outputs['TCIPC_amplitude_at_max_eff_deflection'] = eff_tcipc_amplitude_at_max
 
         # Create summary dictionary for YAML export.
         tip_deflection_summary = {
-            # Overall statistics across all simulations and blades.
+            # Raw overall statistics (no azimuth averaging).
             'max_TipDxc_towerPassing': float(max_deflection),
             'mean_TipDxc_towerPassing': float(mean_deflection),
             'TCIPC_amplitude_at_max_deflection': float(tcipc_amplitude_at_max),
+            # Effective overall statistics (azimuth-averaged for DLC 1.4/1.5).
+            'max_eff_TipDxc_towerPassing': float(eff_max_deflection),
+            'mean_eff_TipDxc_towerPassing': float(eff_mean_deflection),
+            'TCIPC_amplitude_at_max_eff_deflection': float(eff_tcipc_amplitude_at_max),
             # Per-simulation data for detailed analysis.
             'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
             'DLC_name': [c.label for c in dlc_generator.cases],
+            # Effective (azimuth-averaged) values used for the overall statistics.
+            'eff_max_deflection_per_simulation': eff_max_deflection_per_simulation.tolist(),
+            'eff_mean_deflection_per_simulation': eff_mean_deflection_per_simulation.tolist(),
+            # Raw per-simulation values before azimuth averaging.
             'max_deflection_per_simulation': max_deflection_per_simulation.tolist(),
-            'mean_deflection_per_simulation': np.mean(mean_deflection_table, axis=0).tolist(),
+            'mean_deflection_per_simulation': mean_deflection_per_simulation.tolist(),
             # Per-blade, per-simulation data for detailed debugging.
             'max_deflection_blade_1_table': max_deflection_table[0].tolist(),
             'max_deflection_blade_2_table': max_deflection_table[1].tolist(),
