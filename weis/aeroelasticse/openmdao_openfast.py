@@ -2327,7 +2327,7 @@ class FASTLoadCases(ExplicitComponent):
 
         outputs = self.get_weighted_DELs(dlc_generator, inputs, discrete_inputs, outputs)
         
-        outputs = self.get_control_measures(inputs, outputs)
+        outputs = self.get_control_measures(dlc_generator, inputs, outputs)
         
         # Calculate the tower clearance between the blade and tower, takes the azimuth
         # position of the blade into account.
@@ -2886,9 +2886,9 @@ class FASTLoadCases(ExplicitComponent):
 
     def get_weighted_DELs(self, dlc_generator, inputs, discrete_inputs, outputs):
         modopt = self.options['modeling_options']
-        fatigue_dlc_operation = ['1.2', '3.1', '4.1']
-        fatigue_dlc_parked = ['6.4']
-        fatigue_dlc_fault = ['2.4', '7.2']
+        fatigue_dlc_operation = ['1.1']
+        fatigue_dlc_parked = []
+        fatigue_dlc_fault = []
         fatigue_dlcs = fatigue_dlc_operation + fatigue_dlc_parked + fatigue_dlc_fault
         
         # See if we have fatigue DLCs
@@ -2966,7 +2966,7 @@ class FASTLoadCases(ExplicitComponent):
 
         return outputs
 
-    def get_control_measures(self, inputs, outputs):
+    def get_control_measures(self, dlc_generator, inputs, outputs):
         '''
         calculate control measures:
             - rotor_overspeed
@@ -2990,13 +2990,14 @@ class FASTLoadCases(ExplicitComponent):
         max_pitch_rates = maxes['val'].to_numpy()[:nblades]
         outputs['max_pitch_rate_sim'] = max_pitch_rates.max() / np.rad2deg(self.fst_vt['DISCON_in']['PC_MaxRat'])        # normalize by ROSCO pitch rate
         
-        # pitch travel and duty cycle
+        # pitch travel and duty cycle, only using DLC 1.1
+        idx_11 = [k for k in range(dlc_generator.n_cases) if str(dlc_generator.cases[k].label) == '1.1']
         if self.options['modeling_options']['General']['openfast_configuration']['keep_time']:
             tot_time = 0
             tot_travel = 0
             num_dir_changes = 0
             max_pitch_rates = [0,0,0]
-            for i_ts in range(self.cruncher.noutputs):
+            for i_ts in idx_11:
                 iout = self.cruncher.outputs[i_ts].copy()
                 iout.trim_data(self.TStart[i_ts], self.TMax[i_ts])
                 
