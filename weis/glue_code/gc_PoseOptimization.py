@@ -103,6 +103,10 @@ class PoseOptimizationWEIS(PoseOptimization):
             wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_MaxTipDeflection', lower=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['min'],
                                                             upper=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['max'],
                                                             ref=control_opt['servo']['tcipc_control']['TCIPC_MaxTipDeflection']['ref'])
+        if control_opt['servo']['tcipc_control']['TCIPC_MaxPitchAmplitude']['flag']:
+            wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_MaxPitchAmplitude', lower=control_opt['servo']['tcipc_control']['TCIPC_MaxPitchAmplitude']['min'],
+                                                            upper=control_opt['servo']['tcipc_control']['TCIPC_MaxPitchAmplitude']['max'],
+                                                            ref=control_opt['servo']['tcipc_control']['TCIPC_MaxPitchAmplitude']['ref'])
         if control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['flag']:
             wt_opt.model.add_design_var('tune_rosco_ivc.TCIPC_nHarmonics', lower=control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['min'],
                                                             upper=control_opt['servo']['tcipc_control']['TCIPC_nHarmonics']['max'],

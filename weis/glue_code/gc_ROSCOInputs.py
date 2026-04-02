@@ -30,6 +30,7 @@ def assign_ROSCO_values(wt_opt, modeling_options, opt_options):
     # TCIPC
     if rosco_init_options['TCIPC_ControlMode']:
          wt_opt['tune_rosco_ivc.TCIPC_MaxTipDeflection'] = rosco_init_options['TCIPC_MaxTipDeflection']
+         wt_opt['tune_rosco_ivc.TCIPC_MaxPitchAmplitude'] = rosco_init_options['TCIPC_MaxPitchAmplitude']
          wt_opt['tune_rosco_ivc.TCIPC_nHarmonics'] = rosco_init_options['TCIPC_nHarmonics']
          wt_opt['tune_rosco_ivc.TCIPC_ZeroYawDeflection'] = rosco_init_options['TCIPC_ZeroYawDeflection']
     

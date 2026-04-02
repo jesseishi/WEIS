@@ -35,6 +35,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
         self.add_input('IPC_Kp1p',      val=0.0, units='s')
         self.add_input('IPC_Ki1p',      val=0.0,)
         self.add_input('TCIPC_MaxTipDeflection', val=0.0, units='m')
+        self.add_input('TCIPC_MaxPitchAmplitude', val=0.0, units='rad')
         self.add_input('TCIPC_nHarmonics', val=0.0)
         self.add_input('TCIPC_ZeroYawDeflection', val=0.0)
         self.add_input('max_TipDxc_towerPassing', val=0.0, units='m')
@@ -83,6 +84,7 @@ class Outputs_2_Screen(om.ExplicitComponent):
             # TCIPC
             if self.options['opt_options']['design_variables']['control']['servo']['tcipc_control']:
                 print('TCIPC TCIPC_MaxTipDeflection = {:.1f}'.format(inputs['TCIPC_MaxTipDeflection'][0]))
+                print('TCIPC TCIPC_MaxPitchAmplitude = {:.3f}'.format(inputs['TCIPC_MaxPitchAmplitude'][0]))
                 print('TCIPC_nHarmonics = {:.0f}'.format(inputs['TCIPC_nHarmonics'][0]))
                 print('TCIPC_ZeroYawDeflection = {:.0f}'.format(inputs['TCIPC_ZeroYawDeflection'][0]))
            

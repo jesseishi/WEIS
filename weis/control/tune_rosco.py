@@ -178,6 +178,7 @@ class TuneROSCO(ExplicitComponent):
         self.add_input('IPC_Kp1p',          val=0.0,            units='s',              desc='Individual pitch controller 1p proportional gain')
         self.add_input('IPC_Ki1p',          val=0.0,                                    desc='Individual pitch controller 1p integral gain')
         self.add_input('TCIPC_MaxTipDeflection', val=0.0, units='m', desc='Maximum allowable tip deflection at the tower passing')
+        self.add_input('TCIPC_MaxPitchAmplitude', val=0.0, units='rad', desc='Maximum allowable pitch amplitude for TCIPC')
         self.add_input('TCIPC_nHarmonics', val=1.0,           desc='Number of harmonics to consider when calculating the blade deflection at the tower passing.')
         self.add_input('TCIPC_ZeroYawDeflection', val=0.0,    desc='Set the reference for the yaw deflection to zero, this reduces the blade DEL but increases the ADC {0 - disabled, 1 - enabled}.')
         
@@ -228,6 +229,7 @@ class TuneROSCO(ExplicitComponent):
         rosco_init_options['IPC_Kp1p']    = max(0.0, float(inputs['IPC_Kp1p'][0]))
         rosco_init_options['IPC_Ki1p']    = max(0.0, float(inputs['IPC_Ki1p'][0]))
         rosco_init_options['TCIPC_MaxTipDeflection'] = float(inputs['TCIPC_MaxTipDeflection'][0])
+        rosco_init_options['TCIPC_MaxPitchAmplitude'] = float(inputs['TCIPC_MaxPitchAmplitude'][0])
         rosco_init_options['TCIPC_nHarmonics'] = float(inputs['TCIPC_nHarmonics'][0])
         rosco_init_options['TCIPC_ZeroYawDeflection'] = float(inputs['TCIPC_ZeroYawDeflection'][0])
         rosco_init_options['IPC_Kp2p']    = 0.0 # 2P optimization is not currently supported

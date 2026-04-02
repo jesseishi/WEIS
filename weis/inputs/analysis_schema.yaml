@@ -295,6 +295,30 @@ properties:
                                                 minimum: 0.0
                                                 maximum: 100.0
                                                 unit: m
+                                    TCIPC_MaxPitchAmplitude:
+                                        type: object
+                                        default: {}
+                                        description: Maximum allowable pitch amplitude for TCIPC
+                                        properties:
+                                            flag: *flag
+                                            min:
+                                                type: number
+                                                default: 0.0
+                                                minimum: 0.0
+                                                maximum: 1.0
+                                                unit: rad
+                                            max:
+                                                type: number
+                                                default: 0.0
+                                                minimum: 0.0
+                                                maximum: 1.0
+                                                unit: rad
+                                            ref:
+                                                type: number
+                                                default: 0.087
+                                                minimum: 0.0
+                                                maximum: 1.0
+                                                unit: rad
                                     TCIPC_nHarmonics:
                                         type: object
                                         default: {}
