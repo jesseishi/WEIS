@@ -495,18 +495,29 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('avg_pitch_travel',    val=0.0, units='deg/s', desc='Average pitch travel')  # is this over a set of sims?
         self.add_output('pitch_duty_cycle',    val=0.0, units='deg/s', desc='Number of pitch direction changes')  # is this over a set of sims?
         self.add_output('max_pitch_rate_sim',    val=0.0, units='deg/s', desc='Maximum pitch command rate over all simulations')  # is this over a set of sims?
+        self.add_output('max_pitch_rate_sim_DLC', val=0.0, desc='DLC number of the simulation with maximum pitch rate.')
+        self.add_output('max_pitch_rate_sim_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum pitch rate.')
 
         # Blade outputs
         self.add_output('max_TipDxc', val=0.0, units='m', desc='Maximum of channel TipDxc, i.e. out of plane tip deflection. For upwind rotors, the max value is tower the tower')
         # Adding a ref value helps the optimizer scale the objective/constraint.
         self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
+        self.add_output('max_TipDxc_towerPassing_DLC', val=0.0, desc='DLC number of the simulation with maximum tip deflection at tower passing.')
+        self.add_output('max_TipDxc_towerPassing_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tip deflection at tower passing.')
         self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing.')
         self.add_output('TCIPC_amplitude_at_max_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude when maximum tip deflection occurs at tower passing.')
+        self.add_output('TCIPC_amplitude_at_max_deflection_DLC', val=0.0, desc='DLC number of the simulation corresponding to TCIPC_amplitude_at_max_deflection.')
+        self.add_output('TCIPC_amplitude_at_max_deflection_U', val=0.0, units='m/s', desc='Wind speed of the simulation corresponding to TCIPC_amplitude_at_max_deflection.')
+        self.add_output('TCIPC_max_pitch_amplitude', val=0.0, units='deg', desc='Maximum TCIPC pitch amplitude over the full timeseries of all simulations.')
+        self.add_output('TCIPC_max_pitch_amplitude_DLC', val=0.0, desc='DLC number of the simulation with maximum TCIPC pitch amplitude.')
+        self.add_output('TCIPC_max_pitch_amplitude_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum TCIPC pitch amplitude.')
         # Effective (azimuth-averaged) variants for DLC 1.4/1.5.
         self.add_output('max_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
         self.add_output('mean_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
         self.add_output('TCIPC_amplitude_at_max_eff_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude at the effective (azimuth-averaged) maximum tip deflection.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
+        self.add_output('max_RootMyb_DLC', val=0.0, desc='DLC number of the simulation with maximum blade root flapwise moment.')
+        self.add_output('max_RootMyb_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum blade root flapwise moment.')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
         self.add_output('DEL_RootMyb', val=0.0, units='kN*m', desc='damage equivalent load of blade root flap bending moment in out-of-plane direction')
@@ -525,6 +536,8 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('hub_Mxyz_aero', val=np.zeros(3), units='N*m', desc = 'Aero-only maximum hub moments in the non rotating frame')
 
         self.add_output('max_TwrBsMyt',val=0.0, units='kN*m', desc='maximum of tower base bending moment in fore-aft direction')
+        self.add_output('max_TwrBsMyt_DLC', val=0.0, desc='DLC number of the simulation with maximum tower base fore-aft bending moment.')
+        self.add_output('max_TwrBsMyt_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tower base fore-aft bending moment.')
         self.add_output('max_TwrBsMyt_ratio',val=0.0,  desc='ratio of maximum of tower base bending moment in fore-aft direction to maximum allowable bending moment')
         self.add_output('DEL_TwrBsMyt',val=0.0, units='kN*m', desc='damage equivalent load of tower base bending moment in fore-aft direction')
         self.add_output('DEL_TwrBsMyt_ratio',val=0.0, desc='ratio of damage equivalent load of tower base bending moment in fore-aft direction to maximum allowable bending moment')
@@ -2586,10 +2599,11 @@ class FASTLoadCases(ExplicitComponent):
             3: 300.0
         }
 
-        # Initialize result tables for deflection and TCIPC amplitude.
+        # Initialize result tables.
         max_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         mean_deflection_table = np.zeros((self.n_blades, self.cruncher.noutputs))
         tcipc_amplitude_table = np.zeros((self.n_blades, self.cruncher.noutputs))
+        max_tcipc_per_sim = np.zeros((self.cruncher.noutputs))
         case_names = []
 
         # Process each simulation to extract tower-passing statistics.
@@ -2616,6 +2630,9 @@ class FASTLoadCases(ExplicitComponent):
             tcipc_amplitude_ts = compute_tcipc_amplitude_timeseries(
                 blade_pitches[0], blade_pitches[1], blade_pitches[2]
             )
+
+            # Store the maximum TCIPC amplitude over the full timeseries for this simulation.
+            max_tcipc_per_sim[i_ts] = np.max(tcipc_amplitude_ts)
 
             # Process each blade to find deflection and TCIPC amplitude at tower passing.
             for i_blade in range(self.n_blades):
@@ -2719,6 +2736,19 @@ class FASTLoadCases(ExplicitComponent):
         outputs['max_eff_TipDxc_towerPassing'] = eff_max_deflection
         outputs['mean_eff_TipDxc_towerPassing'] = eff_mean_deflection
         outputs['TCIPC_amplitude_at_max_eff_deflection'] = eff_tcipc_amplitude_at_max
+
+        # DLC number and wind speed for outputs tied to the worst-case simulation.
+        # max_TipDxc_towerPassing and TCIPC_amplitude_at_max_deflection both occur at idx_sim_raw.
+        outputs['max_TipDxc_towerPassing_DLC'] = float(dlc_generator.cases[idx_sim_raw].label)
+        outputs['max_TipDxc_towerPassing_U'] = float(dlc_generator.cases[idx_sim_raw].URef)
+        outputs['TCIPC_amplitude_at_max_deflection_DLC'] = float(dlc_generator.cases[idx_sim_raw].label)
+        outputs['TCIPC_amplitude_at_max_deflection_U'] = float(dlc_generator.cases[idx_sim_raw].URef)
+
+        # Maximum TCIPC amplitude over the full timeseries (not restricted to tower-passing moments).
+        idx_max_tcipc = int(np.argmax(max_tcipc_per_sim))
+        outputs['TCIPC_max_pitch_amplitude'] = float(max_tcipc_per_sim[idx_max_tcipc])
+        outputs['TCIPC_max_pitch_amplitude_DLC'] = float(dlc_generator.cases[idx_max_tcipc].label)
+        outputs['TCIPC_max_pitch_amplitude_U'] = float(dlc_generator.cases[idx_max_tcipc].URef)
 
         # Create summary dictionary for YAML export.
         tip_deflection_summary = {
@@ -2989,7 +3019,24 @@ class FASTLoadCases(ExplicitComponent):
         # Pitch rates
         max_pitch_rates = maxes['val'].to_numpy()[:nblades]
         outputs['max_pitch_rate_sim'] = max_pitch_rates.max() / np.rad2deg(self.fst_vt['DISCON_in']['PC_MaxRat'])        # normalize by ROSCO pitch rate
-        
+
+        # DLC number and wind speed for the maximum pitch rate, maximum tower base moment,
+        # and maximum blade root moment, found via per-simulation summary statistics.
+        sum_stats = self.cruncher.summary_stats
+        pitch_rate_arrays = np.array([sum_stats[f'dBldPitch{k+1}']['max'] for k in range(nblades)])
+        _, idx_sim_pr = np.unravel_index(np.argmax(pitch_rate_arrays), pitch_rate_arrays.shape)
+        outputs['max_pitch_rate_sim_DLC'] = float(dlc_generator.cases[idx_sim_pr].label)
+        outputs['max_pitch_rate_sim_U'] = float(dlc_generator.cases[idx_sim_pr].URef)
+
+        idx_twr = int(np.argmax(sum_stats['TwrBsMyt']['max']))
+        outputs['max_TwrBsMyt_DLC'] = float(dlc_generator.cases[idx_twr].label)
+        outputs['max_TwrBsMyt_U'] = float(dlc_generator.cases[idx_twr].URef)
+
+        root_myb_arrays = np.array([sum_stats[f'RootMyb{k+1}']['max'] for k in range(nblades)])
+        _, idx_sim_rmb = np.unravel_index(np.argmax(root_myb_arrays), root_myb_arrays.shape)
+        outputs['max_RootMyb_DLC'] = float(dlc_generator.cases[idx_sim_rmb].label)
+        outputs['max_RootMyb_U'] = float(dlc_generator.cases[idx_sim_rmb].URef)
+
         # pitch travel and duty cycle, only using DLC 1.1
         idx_11 = [k for k in range(dlc_generator.n_cases) if str(dlc_generator.cases[k].label) == '1.1']
         if self.options['modeling_options']['General']['openfast_configuration']['keep_time']:
