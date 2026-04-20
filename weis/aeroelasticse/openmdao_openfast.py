@@ -518,6 +518,7 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyb_DLC', val=0.0, desc='DLC number of the simulation with maximum blade root flapwise moment.')
         self.add_output('max_RootMyb_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum blade root flapwise moment.')
+        self.add_output('max_eff_RootMyt',     val=0.0, units='N*m', desc='characteristic blade root My moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
         self.add_output('DEL_RootMyb', val=0.0, units='kN*m', desc='damage equivalent load of blade root flap bending moment in out-of-plane direction')
@@ -538,6 +539,7 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_TwrBsMyt',val=0.0, units='kN*m', desc='maximum of tower base bending moment in fore-aft direction')
         self.add_output('max_TwrBsMyt_DLC', val=0.0, desc='DLC number of the simulation with maximum tower base fore-aft bending moment.')
         self.add_output('max_TwrBsMyt_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tower base fore-aft bending moment.')
+        self.add_output('max_eff_TwrBsMyt',    val=0.0, units='N*m', desc='characteristic tower base My moment')
         self.add_output('max_TwrBsMyt_ratio',val=0.0,  desc='ratio of maximum of tower base bending moment in fore-aft direction to maximum allowable bending moment')
         self.add_output('DEL_TwrBsMyt',val=0.0, units='kN*m', desc='damage equivalent load of tower base bending moment in fore-aft direction')
         self.add_output('DEL_TwrBsMyt_ratio',val=0.0, desc='ratio of damage equivalent load of tower base bending moment in fore-aft direction to maximum allowable bending moment')
@@ -846,6 +848,41 @@ class FASTLoadCases(ExplicitComponent):
                 shutil.rmtree(self.FAST_runDirectory)
             except:
                 logger.warning('Failed to delete directory: %s'%self.FAST_runDirectory)
+
+    def get_characteristic_load(self, individual_maxes, dlc_codes, wind_speeds):
+        """
+        Calculates the characteristic load according to IEC 61400-1.
+        Takes the mean of maximums across seeds/azimuths for specific DLCs,
+        then the maximum across wind speeds, then the maximum across DLCs.
+        """
+        if len(individual_maxes) == 0:
+            raise ValueError(f"`individual_maxes` is empty.")
+
+        unique_dlcs = np.unique(dlc_codes)
+        unique_ws   = np.unique(wind_speeds)
+        
+        dlc_level_maxes = []
+
+        for dlc in unique_dlcs:
+            ws_level_means = []
+            for ws in unique_ws:
+                # Find indices matching this DLC and Wind Speed (captures multiple seeds/azimuths)
+                idx = np.where((dlc_codes == dlc) & (wind_speeds == ws))[0]
+                
+                if len(idx) > 0:
+                    # IEC 61400-1: Mean of the maxes for 1.1, 1.3, 1.4, 1.5.
+                    # For DLC 1.1 and 1.3 this means taking the mean over different
+                    # turbulent seeds while for 1.4 and 1.5 this means taking the mean
+                    # over different initial conditions.
+                    if dlc in [1.1, 1.3, 1.4, 1.5]:
+                        ws_level_means.append(np.mean(individual_maxes[idx]))
+                    else:
+                        raise NotImplementedError(f"Characteristic load calculation not implemented yet for {dlc}.")
+            
+            if ws_level_means:
+                dlc_level_maxes.append(np.max(ws_level_means))
+
+        return np.max(dlc_level_maxes)
 
     def init_FAST_model(self):
 
@@ -2326,10 +2363,10 @@ class FASTLoadCases(ExplicitComponent):
 
         # Analysis
         if self.options['modeling_options']['flags']['blade'] and bool(self.fst_vt['Fst']['CompAero']):
-            outputs = self.get_blade_loading(inputs, outputs)
+            outputs = self.get_blade_loading(inputs, outputs, dlc_generator)
             
         if self.options['modeling_options']['flags']['tower']:
-            outputs = self.get_tower_loading(inputs, outputs)
+            outputs = self.get_tower_loading(inputs, outputs, dlc_generator)
             
         # SubDyn is only supported in Level3: linearization in OpenFAST will be available in 3.0.0
         if modopt['flags']['monopile']:
@@ -2369,7 +2406,7 @@ class FASTLoadCases(ExplicitComponent):
         if modopt['OL2CL']['flag']:
             outputs = self.get_OL2CL_error(outputs)
 
-    def get_blade_loading(self, inputs, outputs):
+    def get_blade_loading(self, inputs, outputs, dlc_generator):
         """
         Find the spanwise loading along the blade span.
 
@@ -2435,10 +2472,16 @@ class FASTLoadCases(ExplicitComponent):
             blade_root_flap_moment = max([max(sum_stats['RootMyb1']['max']), max(sum_stats['RootMyb2']['max'])])
             blade_root_oop_moment  = max([max(sum_stats['RootMyc1']['max']), max(sum_stats['RootMyc2']['max'])])
             blade_root_tors_moment  = max([max(sum_stats['RootMzb1']['max']), max(sum_stats['RootMzb2']['max'])])
+
+            raise NotImplementedError(f"max eff rootmyb calculation is not implemented for n_blades = 2.")
         else:
             blade_root_flap_moment = max([max(sum_stats['RootMyb1']['max']), max(sum_stats['RootMyb2']['max']), max(sum_stats['RootMyb3']['max'])])
             blade_root_oop_moment  = max([max(sum_stats['RootMyc1']['max']), max(sum_stats['RootMyc2']['max']), max(sum_stats['RootMyc3']['max'])])
             blade_root_tors_moment  = max([max(sum_stats['RootMzb1']['max']), max(sum_stats['RootMzb2']['max']), max(sum_stats['RootMzb3']['max'])])
+
+            blade_root_flap_moment_per_simulation = np.max(np.array([sum_stats["RootMyb1"]["max"], sum_stats["RootMyb2"]["max"], sum_stats["RootMyb3"]["max"]]), axes=0)
+            outputs["max_eff_RootMyb"] = self.get_characteristic_load(blade_root_flap_moment_per_simulation, dlc_generator.cases.label, dlc_generator.cases.URef)
+
         outputs['max_RootMyb'] = blade_root_flap_moment
         outputs['max_RootMyc'] = blade_root_oop_moment
         outputs['max_RootMzb'] = blade_root_tors_moment
@@ -2490,7 +2533,7 @@ class FASTLoadCases(ExplicitComponent):
 
         return outputs
 
-    def get_tower_loading(self, inputs, outputs):
+    def get_tower_loading(self, inputs, outputs, dlc_generator):
         """
         Find the loading along the tower height.
 
@@ -2515,6 +2558,7 @@ class FASTLoadCases(ExplicitComponent):
         # Get the maximum fore-aft moment at tower base
         outputs["max_TwrBsMyt"] = fatb_max
         outputs["max_TwrBsMyt_ratio"] = fatb_max / self.options['opt_options']['constraints']['control']['Max_TwrBsMyt']['max']
+        outputs["max_eff_TwrBsMyt"] = self.get_characteristic_load(sum_stats["TwrBsMyt"]["max"], dlc_generator.cases.label, dlc_generator.cases.URef)
         # Return forces and moments along tower height at instance of largest fore-aft tower base moment
         Fx = [extreme_table[fatb_max_chan][idx][var] for var in tower_chans_Fx]
         Fy = [extreme_table[fatb_max_chan][idx][var] for var in tower_chans_Fy]
