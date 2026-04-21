@@ -505,16 +505,11 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_TipDxc_towerPassing_DLC', val=0.0, desc='DLC number of the simulation with maximum tip deflection at tower passing.')
         self.add_output('max_TipDxc_towerPassing_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tip deflection at tower passing.')
         self.add_output('mean_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing.')
-        self.add_output('TCIPC_amplitude_at_max_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude when maximum tip deflection occurs at tower passing.')
-        self.add_output('TCIPC_amplitude_at_max_deflection_DLC', val=0.0, desc='DLC number of the simulation corresponding to TCIPC_amplitude_at_max_deflection.')
-        self.add_output('TCIPC_amplitude_at_max_deflection_U', val=0.0, units='m/s', desc='Wind speed of the simulation corresponding to TCIPC_amplitude_at_max_deflection.')
         self.add_output('TCIPC_max_pitch_amplitude', val=0.0, units='deg', desc='Maximum TCIPC pitch amplitude over the full timeseries of all simulations.')
         self.add_output('TCIPC_max_pitch_amplitude_DLC', val=0.0, desc='DLC number of the simulation with maximum TCIPC pitch amplitude.')
         self.add_output('TCIPC_max_pitch_amplitude_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum TCIPC pitch amplitude.')
         # Effective (azimuth-averaged) variants for DLC 1.4/1.5.
         self.add_output('max_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
-        self.add_output('mean_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Mean of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
-        self.add_output('TCIPC_amplitude_at_max_eff_deflection', val=0.0, units='deg', desc='TCIPC pitch amplitude at the effective (azimuth-averaged) maximum tip deflection.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyb_DLC', val=0.0, desc='DLC number of the simulation with maximum blade root flapwise moment.')
         self.add_output('max_RootMyb_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum blade root flapwise moment.')
@@ -849,46 +844,46 @@ class FASTLoadCases(ExplicitComponent):
             except:
                 logger.warning('Failed to delete directory: %s'%self.FAST_runDirectory)
 
-    def get_characteristic_load(self, individual_maxes, dlc_codes, wind_speeds):
+    def get_characteristic_value(self, individual_maxes, dlc_generator):
         """
-        Calculates the characteristic load according to IEC 61400-1.
+        Calculates the characteristic value according to IEC 61400-1.
         Takes the mean of maximums across seeds/azimuths for specific DLCs,
         then the maximum across wind speeds, then the maximum across DLCs.
         """
         if len(individual_maxes) == 0:
             raise ValueError(f"`individual_maxes` is empty.")
 
-        unique_dlcs = np.unique(dlc_codes)
-        unique_ws   = np.unique(wind_speeds)
+        individual_maxes = np.asarray(individual_maxes)
 
-        print()
-        print(individual_maxes)
-        print(dlc_codes)
-        print(wind_speeds)
-        print()
-        
-        dlc_level_maxes = []
+        averaging_attribute_per_dlc = {"1.1": "RandSeed1", "1.2": "RandSeed1", "1.3": "RandSeed1", "1.4": "azimuth_init", "1.5": "azimuth_init"}
 
-        for dlc in unique_dlcs:
-            ws_level_means = []
-            for ws in unique_ws:
-                # Find indices matching this DLC and Wind Speed (captures multiple seeds/azimuths)
-                idx = np.nonzero((dlc_codes == dlc) & (wind_speeds == ws))
-                
-                if len(idx) > 0:
-                    # IEC 61400-1: Mean of the maxes for 1.1, 1.3, 1.4, 1.5.
-                    # For DLC 1.1 and 1.3 this means taking the mean over different
-                    # turbulent seeds while for 1.4 and 1.5 this means taking the mean
-                    # over different initial conditions.
-                    if dlc in ["1.1", "1.3", "1.4", "1.5"]:
-                        ws_level_means.append(np.mean(individual_maxes[idx]))
-                    else:
-                        raise NotImplementedError(f"Characteristic load calculation not implemented yet for {dlc}.")
-            
-            if ws_level_means:
-                dlc_level_maxes.append(np.max(ws_level_means))
+        # Build the correct groups over which we have to take the mean.
+        groups = {}
+        for i_case, case in enumerate(dlc_generator.cases):
+            dlc = case.label
+            if dlc not in averaging_attribute_per_dlc.keys():
+                raise NotImplementedError(f"Characteristic load calculation has not been implemented for DLC {case.label}.")
 
-        return np.max(dlc_level_maxes)
+            # Look at all the attributes of this DLC (label, wind speed, turbulent seed,
+            # etc... and remove the attribute over which we want to average.
+            averaging_attribute = averaging_attribute_per_dlc[dlc]
+            case_attributes = case.__dict__.copy()
+            case_attributes.pop(averaging_attribute)
+
+            # Now we add this case index to the group that also shares all the
+            # attributes that are left now. In case this set of attributes doesn't exist
+            # yet, let's set a default as an empty list and add this case to it.
+            # The key that we use is just all the attributes as strings in a tuple.
+            key = tuple(sorted((k, str(v)) for k, v in case_attributes.items()))
+            groups.setdefault(key, []).append(i_case)
+
+        # Now we can take the mean over each group.
+        means = []
+        for group in groups.values():
+            means.append(np.mean(individual_maxes[group]))
+
+        # And finally take the max of means.
+        return np.max(means)
 
     def init_FAST_model(self):
 
@@ -2485,14 +2480,8 @@ class FASTLoadCases(ExplicitComponent):
             blade_root_oop_moment  = max([max(sum_stats['RootMyc1']['max']), max(sum_stats['RootMyc2']['max']), max(sum_stats['RootMyc3']['max'])])
             blade_root_tors_moment  = max([max(sum_stats['RootMzb1']['max']), max(sum_stats['RootMzb2']['max']), max(sum_stats['RootMzb3']['max'])])
 
-            print(sum_stats["RootMyb1"])
-            print()
-            print(sum_stats["RootMyb1"]["max"])
-            print()
-            print()
-
             blade_root_flap_moment_per_simulation = np.max(np.array([sum_stats["RootMyb1"]["max"], sum_stats["RootMyb2"]["max"], sum_stats["RootMyb3"]["max"]]), axis=0)
-            outputs["max_eff_RootMyb"] = self.get_characteristic_load(blade_root_flap_moment_per_simulation, [c.label for c in dlc_generator.cases], [c.URef for c in dlc_generator.cases])
+            outputs["max_eff_RootMyb"] = self.get_characteristic_value(blade_root_flap_moment_per_simulation, dlc_generator)
 
         outputs['max_RootMyb'] = blade_root_flap_moment
         outputs['max_RootMyc'] = blade_root_oop_moment
@@ -2570,7 +2559,7 @@ class FASTLoadCases(ExplicitComponent):
         # Get the maximum fore-aft moment at tower base
         outputs["max_TwrBsMyt"] = fatb_max
         outputs["max_TwrBsMyt_ratio"] = fatb_max / self.options['opt_options']['constraints']['control']['Max_TwrBsMyt']['max']
-        outputs["max_eff_TwrBsMyt"] = self.get_characteristic_load(sum_stats["TwrBsMyt"]["max"], [c.label for c in dlc_generator.cases], [c.URef for c in dlc_generator.cases])
+        outputs["max_eff_TwrBsMyt"] = self.get_characteristic_value(sum_stats["TwrBsMyt"]["max"].tolist(), dlc_generator)
         # Return forces and moments along tower height at instance of largest fore-aft tower base moment
         Fx = [extreme_table[fatb_max_chan][idx][var] for var in tower_chans_Fx]
         Fy = [extreme_table[fatb_max_chan][idx][var] for var in tower_chans_Fy]
@@ -2726,103 +2715,38 @@ class FASTLoadCases(ExplicitComponent):
         # Extract per-simulation statistics across blades.
         max_deflection_per_simulation = np.max(max_deflection_table, axis=0)
         mean_deflection_per_simulation = np.mean(mean_deflection_table, axis=0)
-
-        # For DLC 1.4 and 1.5, multiple simulations are run per scenario that only
-        # differ in azimuth initial condition. We average the worst-case deflections
-        # across these azimuth variants rather than taking the single absolute worst,
-        # as dictated by the standards.
-        # So for DLC 1.4 and 1.5, we group over all DLC attributes, except azimuth_init
-        # and then take the statistics of those groups.
-        azimuth_avg_dlcs = {'1.4', '1.5'}
-        azimuth_groups = {}
-        for i_sim, case in enumerate(dlc_generator.cases):
-            if case.label in azimuth_avg_dlcs:
-                # Group by all attributes except azimuth_init.
-                attrs = vars(case).copy()
-                attrs.pop('azimuth_init', None)
-                key = tuple(sorted((k, str(v)) for k, v in attrs.items()))
-                azimuth_groups.setdefault(key, []).append(i_sim)
-
-        # Build effective arrays where azimuth groups are replaced by their mean.
-        eff_max_deflection_per_simulation = max_deflection_per_simulation.copy()
-        eff_mean_deflection_per_simulation = mean_deflection_per_simulation.copy()
-        for group_indices in azimuth_groups.values():
-            if len(group_indices) > 1:
-                mean_of_maxes = np.mean(max_deflection_per_simulation[group_indices])
-                mean_of_means = np.mean(mean_deflection_per_simulation[group_indices])
-                for idx in group_indices:
-                    eff_max_deflection_per_simulation[idx] = mean_of_maxes
-                    eff_mean_deflection_per_simulation[idx] = mean_of_means
-
-        # Raw overall statistics (no azimuth averaging).
         max_deflection = np.max(max_deflection_per_simulation)
         mean_deflection = np.mean(mean_deflection_per_simulation)
-
-        # Raw TCIPC amplitude corresponding to the absolute worst-case event.
-        idx_blade_raw, idx_sim_raw = np.unravel_index(
-            np.argmax(max_deflection_table), max_deflection_table.shape
-        )
-        tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_raw, idx_sim_raw]
-
-        # Effective overall statistics from the azimuth-averaged arrays.
-        eff_max_deflection = np.max(eff_max_deflection_per_simulation)
-        eff_mean_deflection = np.mean(eff_mean_deflection_per_simulation)
-
-        # Find TCIPC amplitude at the effective worst-case event.
-        idx_eff_max = np.argmax(eff_max_deflection_per_simulation)
-        eff_tcipc_amplitude_at_max = None
-        for group_indices in azimuth_groups.values():
-            if idx_eff_max in group_indices:
-                # Average TCIPC over the azimuth group, using each sim's worst blade.
-                tcipc_values = []
-                for idx in group_indices:
-                    blade_max = np.argmax(max_deflection_table[:, idx])
-                    tcipc_values.append(tcipc_amplitude_table[blade_max, idx])
-                eff_tcipc_amplitude_at_max = np.mean(tcipc_values)
-                break
-        if eff_tcipc_amplitude_at_max is None:
-            # Not in an azimuth group; use the single worst blade directly.
-            idx_blade_eff = np.argmax(max_deflection_table[:, idx_eff_max])
-            eff_tcipc_amplitude_at_max = tcipc_amplitude_table[idx_blade_eff, idx_eff_max]
+       
+        eff_max_deflection = self.get_characteristic_value(max_deflection_per_simulation, dlc_generator)
 
         # Write outputs.
         outputs['max_TipDxc_towerPassing'] = max_deflection
         outputs['mean_TipDxc_towerPassing'] = mean_deflection
-        outputs['TCIPC_amplitude_at_max_deflection'] = tcipc_amplitude_at_max
         outputs['max_eff_TipDxc_towerPassing'] = eff_max_deflection
-        outputs['mean_eff_TipDxc_towerPassing'] = eff_mean_deflection
-        outputs['TCIPC_amplitude_at_max_eff_deflection'] = eff_tcipc_amplitude_at_max
 
         # DLC number and wind speed for outputs tied to the worst-case simulation.
-        # max_TipDxc_towerPassing and TCIPC_amplitude_at_max_deflection both occur at idx_sim_raw.
-        outputs['max_TipDxc_towerPassing_DLC'] = float(dlc_generator.cases[idx_sim_raw].label)
-        outputs['max_TipDxc_towerPassing_U'] = float(dlc_generator.cases[idx_sim_raw].URef)
-        outputs['TCIPC_amplitude_at_max_deflection_DLC'] = float(dlc_generator.cases[idx_sim_raw].label)
-        outputs['TCIPC_amplitude_at_max_deflection_U'] = float(dlc_generator.cases[idx_sim_raw].URef)
+        idx = int(np.argmax(max_deflection_per_simulation))
+        outputs['max_TipDxc_towerPassing_DLC'] = float(dlc_generator.cases[idx].label)
+        outputs['max_TipDxc_towerPassing_U'] = float(dlc_generator.cases[idx].URef)
 
         # Maximum TCIPC amplitude over the full timeseries (not restricted to tower-passing moments).
-        idx_max_tcipc = int(np.argmax(max_tcipc_per_sim))
-        outputs['TCIPC_max_pitch_amplitude'] = float(max_tcipc_per_sim[idx_max_tcipc])
-        outputs['TCIPC_max_pitch_amplitude_DLC'] = float(dlc_generator.cases[idx_max_tcipc].label)
-        outputs['TCIPC_max_pitch_amplitude_U'] = float(dlc_generator.cases[idx_max_tcipc].URef)
+        idx = int(np.argmax(max_tcipc_per_sim))
+        outputs['TCIPC_max_pitch_amplitude'] = float(max_tcipc_per_sim[idx])
+        outputs['TCIPC_max_pitch_amplitude_DLC'] = float(dlc_generator.cases[idx].label)
+        outputs['TCIPC_max_pitch_amplitude_U'] = float(dlc_generator.cases[idx].URef)
 
         # Create summary dictionary for YAML export.
         tip_deflection_summary = {
             # Raw overall statistics (no azimuth averaging).
             'max_TipDxc_towerPassing': float(max_deflection),
             'mean_TipDxc_towerPassing': float(mean_deflection),
-            'TCIPC_amplitude_at_max_deflection': float(tcipc_amplitude_at_max),
-            # Effective overall statistics (azimuth-averaged for DLC 1.4/1.5).
+            # Effective overall statistics from characteristic values.
             'max_eff_TipDxc_towerPassing': float(eff_max_deflection),
-            'mean_eff_TipDxc_towerPassing': float(eff_mean_deflection),
-            'TCIPC_amplitude_at_max_eff_deflection': float(eff_tcipc_amplitude_at_max),
             # Per-simulation data for detailed analysis.
             'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
             'DLC_name': [c.label for c in dlc_generator.cases],
-            # Effective (azimuth-averaged) values used for the overall statistics.
-            'eff_max_deflection_per_simulation': eff_max_deflection_per_simulation.tolist(),
-            'eff_mean_deflection_per_simulation': eff_mean_deflection_per_simulation.tolist(),
             # Raw per-simulation values before azimuth averaging.
             'max_deflection_per_simulation': max_deflection_per_simulation.tolist(),
             'mean_deflection_per_simulation': mean_deflection_per_simulation.tolist(),
