@@ -855,20 +855,33 @@ class FASTLoadCases(ExplicitComponent):
 
         individual_maxes = np.asarray(individual_maxes)
 
-        averaging_attribute_per_dlc = {"1.1": "RandSeed1", "1.2": "RandSeed1", "1.3": "RandSeed1", "1.4": "azimuth_init", "1.5": "azimuth_init"}
+        averaging_attributes_per_dlc = {
+            "1.1": ["RandSeed1", "wind_seed", "wave_seed"], 
+            "1.2": ["RandSeed1", "wind_seed", "wave_seed"], 
+            "1.3": ["RandSeed1", "wind_seed", "wave_seed"], 
+            "1.4": ["azimuth_init"], 
+            "1.5": ["azimuth_init"]
+        }
 
         # Build the correct groups over which we have to take the mean.
         groups = {}
         for i_case, case in enumerate(dlc_generator.cases):
             dlc = case.label
-            if dlc not in averaging_attribute_per_dlc.keys():
+            if dlc not in averaging_attributes_per_dlc.keys():
                 raise NotImplementedError(f"Characteristic load calculation has not been implemented for DLC {case.label}.")
 
             # Look at all the attributes of this DLC (label, wind speed, turbulent seed,
-            # etc... and remove the attribute over which we want to average.
-            averaging_attribute = averaging_attribute_per_dlc[dlc]
+            # etc... and remove the attributes over which we want to average.
+            averaging_attributes = averaging_attributes_per_dlc[dlc]
             case_attributes = case.__dict__.copy()
-            case_attributes.pop(averaging_attribute)
+
+            print()
+            print(f"Looking at {i_case=} with {dlc=} and {averaging_attributes=}")
+            print(case_attributes)
+            print()
+
+            for averaging_attribute in averaging_attributes:
+                case_attributes.pop(averaging_attribute)
 
             # Now we add this case index to the group that also shares all the
             # attributes that are left now. In case this set of attributes doesn't exist
@@ -880,6 +893,7 @@ class FASTLoadCases(ExplicitComponent):
         # Now we can take the mean over each group.
         means = []
         for group in groups.values():
+            print(f"{group=}")
             means.append(np.mean(individual_maxes[group]))
 
         # And finally take the max of means.
