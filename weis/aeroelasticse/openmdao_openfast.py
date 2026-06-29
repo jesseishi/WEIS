@@ -855,6 +855,13 @@ class FASTLoadCases(ExplicitComponent):
 
         individual_maxes = np.asarray(individual_maxes)
 
+        # Attributes over which we want to average for each DLC. For example, DLC 1.5
+        # (wind shear change) varies the azimuth_init, the wind shear
+        # (horizontal/vertical), and direction (positive/negative). By specifying
+        # azimuth_init, we take the average for each unique combination of
+        # horizontal/vertical and positive/negative wind shear input. So we get four
+        # means and then take the max over those four means. If wind speed is also
+        # varied, we het four means for each wind speed and then take the max.
         averaging_attributes_per_dlc = {
             "1.1": ["RandSeed1", "wind_seed", "wave_seed"], 
             "1.2": ["RandSeed1", "wind_seed", "wave_seed"], 
