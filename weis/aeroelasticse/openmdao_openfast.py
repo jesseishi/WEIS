@@ -882,11 +882,6 @@ class FASTLoadCases(ExplicitComponent):
             averaging_attributes = averaging_attributes_per_dlc[dlc]
             case_attributes = case.__dict__.copy()
 
-            print()
-            print(f"Looking at {i_case=} with {dlc=} and {averaging_attributes=}")
-            print(case_attributes)
-            print()
-
             for averaging_attribute in averaging_attributes:
                 case_attributes.pop(averaging_attribute)
 
@@ -900,7 +895,6 @@ class FASTLoadCases(ExplicitComponent):
         # Now we can take the mean over each group.
         means = []
         for group in groups.values():
-            print(f"{group=}")
             means.append(np.mean(individual_maxes[group]))
 
         # And finally take the max of means.
@@ -2651,12 +2645,12 @@ class FASTLoadCases(ExplicitComponent):
             amplitude_ts = np.sqrt((2.0 / 3.0) * (y1**2 + y2**2 + y3**2))
             return amplitude_ts
         
-        # Create output directory for this iteration.
-        save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
-        os.makedirs(save_dir, exist_ok=True)
-        fname = os.path.join(save_dir, 'tip_deflection_summary.yaml')
-        logging.info(f"Doing tower clearance analysis, saving to {fname}")
-        print(f"Doing tower clearance analysis, saving to {fname}")
+        # # Create output directory for this iteration.
+        # save_dir = os.path.join(self.FAST_runDirectory, 'iteration_' + str(self.of_inumber))
+        # os.makedirs(save_dir, exist_ok=True)
+        # fname = os.path.join(save_dir, 'tip_deflection_summary.yaml')
+        # logging.info(f"Doing tower clearance analysis, saving to {fname}")
+        # print(f"Doing tower clearance analysis, saving to {fname}")
 
         # Define azimuth angles where each blade passes the tower.
         tower_azimuth_per_blade = {
@@ -2783,7 +2777,7 @@ class FASTLoadCases(ExplicitComponent):
             'tcipc_amplitude_blade_3_table': tcipc_amplitude_table[2].tolist(),
         }
         
-        write_yaml(tip_deflection_summary, fname)
+        # write_yaml(tip_deflection_summary, fname)
         
         return outputs
 
