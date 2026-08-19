@@ -501,6 +501,8 @@ class FASTLoadCases(ExplicitComponent):
         # Blade outputs
         self.add_output('max_TipDxc', val=0.0, units='m', desc='Maximum of channel TipDxc, i.e. out of plane tip deflection. For upwind rotors, the max value is tower the tower')
         # Adding a ref value helps the optimizer scale the objective/constraint.
+        self.add_output('minimum_tower_clearance', val=0.0, units='m', ref=20, desc='Minimum tower clearance over all simulations.')
+        self.add_output('minimum_eff_tower_clearance', val=0.0, units='m', ref=20, desc='Characteristic value of minimum tower clearance over all simulations.')
         self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
         self.add_output('max_TipDxc_towerPassing_DLC', val=0.0, desc='DLC number of the simulation with maximum tip deflection at tower passing.')
         self.add_output('max_TipDxc_towerPassing_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tip deflection at tower passing.')
@@ -2778,7 +2780,22 @@ class FASTLoadCases(ExplicitComponent):
         }
         
         # write_yaml(tip_deflection_summary, fname)
+
+        # The downside of the metrics above is that they do not include effects like
+        # rotor tilt, coning, and overhang. So instead, we also directly use OpenFAST's
+        # TipClrnc signals which estimate the distance between the blade's tip and the
+        # tower.
+        clearance_cols = ["TipClrnc1", "TipClrnc2", "TipClrnc3"]
+
+        minimum_clearance_per_simulation = np.zeros((self.cruncher.noutputs))
+        for i, ts in enumerate(self.cruncher.outputs):
+            minimum_clearance_per_simulation[i] = min(ts.df[col].min() for col in clearance_cols)
+        minimum_tower_clearance = min(minimum_clearance_per_simulation)
+        minimum_eff_tower_clearance = self.get_characteristic_value(minimum_clearance_per_simulation, dlc_generator)
         
+        outputs["minimum_tower_clearance"] = minimum_tower_clearance
+        outputs["minimum_eff_tower_clearance"] = minimum_eff_tower_clearance
+
         return outputs
 
     def get_monopile_loading(self, inputs, outputs):
