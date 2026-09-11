@@ -846,16 +846,21 @@ class FASTLoadCases(ExplicitComponent):
             except:
                 logger.warning('Failed to delete directory: %s'%self.FAST_runDirectory)
 
-    def get_characteristic_value(self, individual_maxes, dlc_generator):
+    def get_characteristic_value(
+            self, 
+            values,
+            dlc_generator,
+            between_group_function=np.max,
+            within_group_function=np.mean):
         """
         Calculates the characteristic value according to IEC 61400-1.
         Takes the mean of maximums across seeds/azimuths for specific DLCs,
         then the maximum across wind speeds, then the maximum across DLCs.
         """
-        if len(individual_maxes) == 0:
-            raise ValueError(f"`individual_maxes` is empty.")
+        if len(values) == 0:
+            raise ValueError(f"`values` is empty.")
 
-        individual_maxes = np.asarray(individual_maxes)
+        values = np.asarray(values)
 
         # Attributes over which we want to average for each DLC. For example, DLC 1.5
         # (wind shear change) varies the azimuth_init, the wind shear
@@ -894,13 +899,13 @@ class FASTLoadCases(ExplicitComponent):
             key = tuple(sorted((k, str(v)) for k, v in case_attributes.items()))
             groups.setdefault(key, []).append(i_case)
 
-        # Now we can take the mean over each group.
-        means = []
+        # Now we can calculate the value for each group.
+        group_values = []
         for group in groups.values():
-            means.append(np.mean(individual_maxes[group]))
+            group_values.append(within_group_function(values[group]))
 
-        # And finally take the max of means.
-        return np.max(means)
+        # And finally calculate the characteristic value over all groups.
+        return between_group_function(group_values)
 
     def init_FAST_model(self):
 
@@ -2791,7 +2796,12 @@ class FASTLoadCases(ExplicitComponent):
         for i, ts in enumerate(self.cruncher.outputs):
             minimum_clearance_per_simulation[i] = min(ts.df[col].min() for col in clearance_cols)
         minimum_tower_clearance = min(minimum_clearance_per_simulation)
-        minimum_eff_tower_clearance = self.get_characteristic_value(minimum_clearance_per_simulation, dlc_generator)
+        minimum_eff_tower_clearance = self.get_characteristic_value(
+            minimum_clearance_per_simulation, 
+            dlc_generator,
+            between_group_function=np.min,
+            within_group_function=np.mean
+        )  # The characteristic value is the minimum of the means.
         
         outputs["minimum_tower_clearance"] = minimum_tower_clearance
         outputs["minimum_eff_tower_clearance"] = minimum_eff_tower_clearance
