@@ -503,7 +503,7 @@ class FASTLoadCases(ExplicitComponent):
         # Adding a ref value helps the optimizer scale the objective/constraint.
         self.add_output('minimum_tower_clearance', val=0.0, units='m', ref=20, desc='Minimum tower clearance over all simulations.')
         self.add_output('minimum_eff_tower_clearance', val=0.0, units='m', ref=20, desc='Characteristic value of minimum tower clearance over all simulations.')
-        self.add_output('minimum_eff_tower_clearance_DLC', val=0.0, units='', ref=20, desc='DLC of characteristic value of minimum tower clearance over all simulations.')
+        self.add_output('minimum_eff_tower_clearance_DLC', val=0.0, ref=20, desc='DLC of characteristic value of minimum tower clearance over all simulations.')
         self.add_output('minimum_eff_tower_clearance_URef', val=0.0, units='m/s', ref=20, desc='URef of characteristic value of minimum tower clearance over all simulations.')
         self.add_output('max_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing.')
         self.add_output('max_TipDxc_towerPassing_DLC', val=0.0, desc='DLC number of the simulation with maximum tip deflection at tower passing.')
@@ -514,13 +514,13 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('TCIPC_max_pitch_amplitude_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum TCIPC pitch amplitude.')
         # Effective (azimuth-averaged) variants for DLC 1.4/1.5.
         self.add_output('max_eff_TipDxc_towerPassing', val=0.0, units='m', ref=20, desc='Maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
-        self.add_output('max_eff_TipDxc_towerPassing_DLC', val=0.0, units='', ref=20, desc='DLC of maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
+        self.add_output('max_eff_TipDxc_towerPassing_DLC', val=0.0, ref=20, desc='DLC of maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
         self.add_output('max_eff_TipDxc_towerPassing_URef', val=0.0, units='m/s', ref=20, desc='URef of maximum of channel TipDxc around the tower crossing, averaged over azimuth initial conditions for DLC 1.4/1.5.')
         self.add_output('max_RootMyb', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root flapwise moment')
         self.add_output('max_RootMyb_DLC', val=0.0, desc='DLC number of the simulation with maximum blade root flapwise moment.')
         self.add_output('max_RootMyb_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum blade root flapwise moment.')
         self.add_output('max_eff_RootMyb',     val=0.0, units='N*m', desc='characteristic blade root My moment')
-        self.add_output('max_eff_RootMyb_DLC',     val=0.0, units='', desc='DLC of characteristic blade root My moment')
+        self.add_output('max_eff_RootMyb_DLC', val=0.0, desc='DLC of characteristic blade root My moment')
         self.add_output('max_eff_RootMyb_URef',     val=0.0, units='m/s', desc='URef of characteristic blade root My moment')
         self.add_output('max_RootMyc', val=0.0, units='kN*m', desc='Maximum of the signals RootMyb1, RootMyb2, ... across all n blades representing the maximum blade root out of plane moment')
         self.add_output('max_RootMzb', val=0.0, units='kN*m', desc='Maximum of the signals RootMzb1, RootMzb2, ... across all n blades representing the maximum blade root torsional moment')
@@ -543,7 +543,7 @@ class FASTLoadCases(ExplicitComponent):
         self.add_output('max_TwrBsMyt_DLC', val=0.0, desc='DLC number of the simulation with maximum tower base fore-aft bending moment.')
         self.add_output('max_TwrBsMyt_U', val=0.0, units='m/s', desc='Wind speed of the simulation with maximum tower base fore-aft bending moment.')
         self.add_output('max_eff_TwrBsMyt',    val=0.0, units='N*m', desc='characteristic tower base My moment')
-        self.add_output('max_eff_TwrBsMyt_DLC',    val=0.0, units='', desc='DLC of characteristic tower base My moment')
+        self.add_output('max_eff_TwrBsMyt_DLC', val=0.0, desc='DLC of characteristic tower base My moment')
         self.add_output('max_eff_TwrBsMyt_URef',    val=0.0, units='m/a', desc='URef of characteristic tower base My moment')
         self.add_output('max_TwrBsMyt_ratio',val=0.0,  desc='ratio of maximum of tower base bending moment in fore-aft direction to maximum allowable bending moment')
         self.add_output('DEL_TwrBsMyt',val=0.0, units='kN*m', desc='damage equivalent load of tower base bending moment in fore-aft direction')
@@ -920,11 +920,16 @@ class FASTLoadCases(ExplicitComponent):
 
         # Get the characteristic value and the information of its group.
         char_val = between_group_function(group_values)
-        i_char_val = np.argwhere(char_val == np.asarray(group_values))  # TODO: This assumes that the between group function selects one group and gets that value (e.g. min or max but not mean).
-        if not any(i_char_val):
+        i_char_val = np.argwhere(char_val == np.asarray(group_values)).flatten()  # TODO: This assumes that the between group function selects one group and gets that value (e.g. min or max but not mean).
+        if i_char_val.size == 0:
             raise Exception(f"Expected the characteristic value to match in one of the groups. {char_val=}, {i_char_val=}, {group_values=}")
-        char_dlc = group_dlcs[i_char_val]
-        char_URef = group_URefs[i_char_val]
+        # Return a single value when only one group matches, otherwise return a list for each match.
+        if i_char_val.size == 1:
+            char_dlc = group_dlcs[i_char_val[0]]
+            char_URef = group_URefs[i_char_val[0]]
+        else:
+            char_dlc = [group_dlcs[i] for i in i_char_val]
+            char_URef = [group_URefs[i] for i in i_char_val]
 
         return char_val, char_dlc, char_URef
 
@@ -2783,7 +2788,7 @@ class FASTLoadCases(ExplicitComponent):
             'max_TipDxc_towerPassing': float(max_deflection),
             'mean_TipDxc_towerPassing': float(mean_deflection),
             # Effective overall statistics from characteristic values.
-            'max_eff_TipDxc_towerPassing': float(eff_max_deflection),
+            'max_eff_TipDxc_towerPassing': outputs['max_eff_TipDxc_towerPassing'],
             # Per-simulation data for detailed analysis.
             'case_name': case_names,
             'U': [c.URef for c in dlc_generator.cases],
