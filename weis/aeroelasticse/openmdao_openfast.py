@@ -866,7 +866,7 @@ class FASTLoadCases(ExplicitComponent):
         then the maximum across wind speeds, then the maximum across DLCs.
         """
         if len(values) == 0:
-            raise ValueError(f"`values` is empty.")
+            raise ValueError("`values` is empty.")
 
         values = np.asarray(values)
 
@@ -921,15 +921,21 @@ class FASTLoadCases(ExplicitComponent):
         # Get the characteristic value and the information of its group.
         char_val = between_group_function(group_values)
         i_char_val = np.argwhere(char_val == np.asarray(group_values)).flatten()  # TODO: This assumes that the between group function selects one group and gets that value (e.g. min or max but not mean).
+        
         if i_char_val.size == 0:
             raise Exception(f"Expected the characteristic value to match in one of the groups. {char_val=}, {i_char_val=}, {group_values=}")
-        # Return a single value when only one group matches, otherwise return a list for each match.
-        if i_char_val.size == 1:
-            char_dlc = group_dlcs[i_char_val[0]]
-            char_URef = group_URefs[i_char_val[0]]
-        else:
-            char_dlc = [group_dlcs[i] for i in i_char_val]
-            char_URef = [group_URefs[i] for i in i_char_val]
+        # We always return only the first match, otherwise OpenMDAO throws an error. But
+        # we warn the user if there were more elements.
+        char_dlc = group_dlcs[i_char_val[0]]
+        char_URef = group_URefs[i_char_val[0]]
+
+        # Here we inform the user if there were more matches.
+        char_dlc_full = [group_dlcs[i] for i in i_char_val]
+        char_URef_full = [group_URefs[i] for i in i_char_val]
+        if len(set(char_dlc_full)) != 1:
+            print(f"WARNING: got multiple DLCs that are driving for this characteristic value. {group_dlcs}")
+        if len(set(char_URef_full)) != 1:
+            print(f"WARNING: got multiple DLCs that are driving for this characteristic value. {group_URefs}")
 
         return char_val, char_dlc, char_URef
 
